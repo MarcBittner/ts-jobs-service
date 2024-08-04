@@ -1,0 +1,3 @@
+LINKEDIN_ACCESS_TOKEN=your_access_token_here
+JOB_SEARCH_INTERVAL=60000 # Interval in milliseconds
+LOG_FILE_PATH=logs/app.log
