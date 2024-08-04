@@ -21,18 +21,22 @@
 7 directories, 12 files
 // ./utils/logger.ts
 
+
 import winston from 'winston';
 
-export function configureLogger() {
-  return winston.createLogger({
-    level: 'info',
-    format: winston.format.json(),
-    transports: [
-      new winston.transports.Console(),
-      new winston.transports.File({ filename: process.env.LOG_FILE_PATH }),
-    ],
-  });
-}
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.Console(),
+    new winston.transports.File({ filename: process.env.LOG_FILE_PATH || 'app.log' }),
+  ],
+});
+
+export default logger;
 
 // ./models/SearchResult.ts
 
@@ -152,11 +156,13 @@ export interface QueryParams {
 
 // ./index.ts
 
+// ./index.ts
+
 import express from 'express';
-import { Sequelize } from 'sequelize';
 import * as dotenv from 'dotenv';
 import { createSearch, getAllSearches, updateSearch, deleteSearch } from './controllers/searchController';
 import { startMonitoringAllSearches } from './services/SearchManager';
+import logger from './utils/logger';
 
 dotenv.config();
 
@@ -174,7 +180,7 @@ app.delete('/search/:id', deleteSearch);
 
 // Start the server
 app.listen(port, async () => {
-  console.log(`Server running on port ${port}`);
+  logger.info(`Server running on port ${port}`);
   await startMonitoringAllSearches();
 });
 
@@ -193,22 +199,23 @@ export const dbConfig = {
 
 // ./controllers/SearchController.ts
 
-// ./src/controllers/searchController.ts
+// ./controllers/SearchController.ts
 
 import { Request, Response } from 'express';
 import SearchDefinition from '../models/SearchDefinition';
 import { scheduleJob } from '../services/SearchManager';
+import logger from '../utils/logger';
 
 export const createSearch = async (req: Request, res: Response) => {
-  console.log('Received request to create search:', req.body); // Log request body
+  logger.info('Received request to create search', { body: req.body });
 
   try {
     const { keyword, location, refreshInterval } = req.body;
     const newSearch = await SearchDefinition.create({ keyword, location, refreshInterval });
-    await scheduleJob(newSearch); // Schedule job for the new search
+    await scheduleJob(newSearch);
     res.status(201).json({ message: 'Search created', data: newSearch });
   } catch (error: any) {
-    console.error('Error creating search:', error); // Log the error
+    logger.error('Error creating search', { error: error.message });
     res.status(500).json({ error: error.message });
   }
 };
@@ -218,7 +225,7 @@ export const getAllSearches = async (req: Request, res: Response) => {
     const searches = await SearchDefinition.findAll();
     res.status(200).json(searches);
   } catch (error: any) {
-    console.error('Error fetching searches:', error);
+    logger.error('Error fetching searches', { error: error.message });
     res.status(500).json({ error: error.message });
   }
 };
@@ -230,6 +237,7 @@ export const updateSearch = async (req: Request, res: Response) => {
     const search = await SearchDefinition.findByPk(id);
 
     if (!search) {
+      logger.warn('Search not found', { id });
       return res.status(404).json({ error: 'Search not found' });
     }
 
@@ -237,10 +245,10 @@ export const updateSearch = async (req: Request, res: Response) => {
     search.location = location || search.location;
     search.refreshInterval = refreshInterval || search.refreshInterval;
     await search.save();
-    await scheduleJob(search); // Reschedule job with updated details
+    await scheduleJob(search);
     res.status(200).json(search);
   } catch (error: any) {
-    console.error('Error updating search:', error);
+    logger.error('Error updating search', { error: error.message });
     res.status(500).json({ error: error.message });
   }
 };
@@ -251,16 +259,19 @@ export const deleteSearch = async (req: Request, res: Response) => {
     const search = await SearchDefinition.findByPk(id);
 
     if (!search) {
+      logger.warn('Search not found', { id });
       return res.status(404).json({ error: 'Search not found' });
     }
 
     await search.destroy();
     res.status(200).json({ message: 'Search deleted' });
   } catch (error: any) {
-    console.error('Error deleting search:', error);
+    logger.error('Error deleting search', { error: error.message });
     res.status(500).json({ error: error.message });
   }
 };
+
+// ./server.ts
 
 // ./server.ts
 
@@ -271,7 +282,7 @@ import sequelize from './db';
 import SearchDefinition from './models/SearchDefinition';
 import SearchResult from './models/SearchResult';
 import { startMonitoringAllSearches } from './services/SearchManager';
-
+import logger from './utils/logger';
 
 sequelize.sync();
 
@@ -281,22 +292,22 @@ const port = process.env.PORT || 3000;
 app.use(bodyParser.json());
 
 app.use((req, res, next) => {
-  console.log(`${req.method} ${req.path}`);
+  logger.info(`Request received`, { method: req.method, path: req.path });
   next();
 });
 
 app.use('/api', searchRoutes);
 
 app.listen(port, async () => {
-  console.log(`Server is running on port ${port}`);
+  logger.info(`Server is running on port ${port}`);
   try {
     await sequelize.authenticate();
     await SearchDefinition.sync();
     await SearchResult.sync();
     await startMonitoringAllSearches();
-    console.log('Database connected and models synchronized');
+    logger.info('Database connected and models synchronized');
   } catch (error) {
-    console.error('Error connecting to the database:', error);
+    logger.error('Error connecting to the database', { error: (error as Error).message });
   }
 });
 
@@ -332,14 +343,13 @@ export default router;
 
 // ./services/SearchManager.ts
 
-// src/services/SearchManager.ts
+// ./services/SearchManager.ts
 
 import nodeSchedule from 'node-schedule';
 import SearchDefinition from '../models/SearchDefinition';
 import SearchResult from '../models/SearchResult';
 import fetchJobListings from './LinkedInService';
-
-
+import logger from '../utils/logger';
 
 const jobs: { [key: number]: nodeSchedule.Job } = {};
 
@@ -348,23 +358,30 @@ export const scheduleJob = async (search: SearchDefinition) => {
     jobs[search.id].cancel();
   }
 
-  const job = nodeSchedule.scheduleJob(`*/${search.refreshInterval} * * * *`, async () => {
-    const jobListings = await fetchJobListings({
-      keyword: search.keyword,
-      location: search.location,
-    });
+  logger.info('Scheduling job', { searchId: search.id, refreshInterval: search.refreshInterval });
 
-    // Save job listings to the database
-    for (const listing of jobListings) {
-      await SearchResult.create({
-        searchId: search.id,
-        position: listing.position,
-        company: listing.company,
-        location: listing.location,
-        date: listing.date,
-        salary: listing.salary,
-        jobUrl: listing.jobUrl,
+  const job = nodeSchedule.scheduleJob(`*/${search.refreshInterval} * * * *`, async () => {
+    try {
+      const jobListings = await fetchJobListings({
+        keyword: search.keyword,
+        location: search.location,
       });
+
+      for (const listing of jobListings) {
+        await SearchResult.create({
+          searchId: search.id,
+          position: listing.position,
+          company: listing.company,
+          location: listing.location,
+          date: listing.date,
+          salary: listing.salary,
+          jobUrl: listing.jobUrl,
+        });
+      }
+
+      logger.info('Job listings fetched and saved', { searchId: search.id });
+    } catch (error) {
+      logger.error('Error during job execution', { error: (error as Error).message });
     }
   });
 
@@ -372,14 +389,20 @@ export const scheduleJob = async (search: SearchDefinition) => {
 };
 
 export const startMonitoringAllSearches = async () => {
-  const searches = await SearchDefinition.findAll();
-  searches.forEach(scheduleJob);
+  try {
+    const searches = await SearchDefinition.findAll();
+    searches.forEach(scheduleJob);
+    logger.info('Started monitoring all searches');
+  } catch (error) {
+    logger.error('Error starting monitoring of searches', { error: (error as Error).message });
+  }
 };
 
 export const stopJob = (searchId: number) => {
   if (jobs[searchId]) {
     jobs[searchId].cancel();
     delete jobs[searchId];
+    logger.info('Stopped job', { searchId });
   }
 };
 
