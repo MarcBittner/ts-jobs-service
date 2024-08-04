@@ -1,14 +1,25 @@
-import dotenv from 'dotenv';
-import LinkedInService from './services/LinkedInService';
-import SearchManager from './services/SearchManager';
-import { configureLogger } from './utils/logger';
+import express from 'express';
+import { Sequelize } from 'sequelize';
+import * as dotenv from 'dotenv';
+import { createSearch, getAllSearches, updateSearch, deleteSearch } from './controllers/searchController';
+import { startMonitoringAllSearches } from './services/SearchManager';
 
 dotenv.config();
 
-const logger = configureLogger();
+const app = express();
+const port = process.env.PORT || 3000;
 
-const searchManager = new SearchManager(new LinkedInService(), logger);
+// Middleware
+app.use(express.json());
 
-searchManager.startMonitoring();
+// Routes
+app.post('/search', createSearch);
+app.get('/search', getAllSearches);
+app.put('/search/:id', updateSearch);
+app.delete('/search/:id', deleteSearch);
 
-logger.info('Job monitoring service started.');
+// Start the server
+app.listen(port, async () => {
+  console.log(`Server running on port ${port}`);
+  await startMonitoringAllSearches();
+});

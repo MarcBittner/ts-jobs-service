@@ -1,45 +1,29 @@
+// src/services/LinkedInService.ts
+
 import { RestliClient } from 'linkedin-api-client';
-import { JobListing, QueryParams } from '../types';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const accessToken = process.env.LINKEDIN_ACCESS_TOKEN;
+const accessToken = process.env.ACCESS_TOKEN || process.env.LINKEDIN_ACCESS_TOKEN;
 
 if (!accessToken) {
-  throw new Error('Access token is not defined.');
+  throw new Error('Access token is not defined. Please check your environment variables.');
 }
 
 const restliClient = new RestliClient();
 
-class LinkedInService {
-  private readonly apiUrl = 'jobSearch';
-
-  public async fetchJobListings(query: QueryParams): Promise<JobListing[]> {
-    try {
-      const response = await restliClient.get({
-        resourcePath: this.apiUrl,
-        accessToken: accessToken,
-        query,
-      });
-
-      return this.parseJobList(response.data);
-    } catch (error) {
-      console.error('Error fetching job listings:', error);
-      return [];
-    }
+const fetchJobListings = async (queryObject: { keyword: string; location: string }) => {
+  try {
+    const response = await restliClient.get({
+      resourcePath: `jobSearch?q=jobs&keywords=${encodeURIComponent(queryObject.keyword)}&location=${encodeURIComponent(queryObject.location)}`,
+      accessToken: accessToken as string,
+    });
+    return response.data.elements;
+  } catch (error) {
+    console.error('Error fetching job listings:', error);
+    return [];
   }
+};
 
-  private parseJobList(data: any): JobListing[] {
-    return data.elements.map((job: any) => ({
-      position: job.title,
-      company: job.companyName,
-      location: job.location,
-      date: job.datePosted,
-      salary: job.salary,
-      jobUrl: job.jobUrl,
-    }));
-  }
-}
-
-export default LinkedInService;
+export default fetchJobListings;

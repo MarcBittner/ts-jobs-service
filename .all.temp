@@ -1,1372 +1,1187 @@
-// ./build.test.sh
+// ./utils/logger.ts
 
-#!/bin/bash
+import winston from 'winston';
 
-set -uo pipefail;
-
-# Interactive debug testing is off by default.
-# To turn it on, pass TEST_INTERACTIVE=1
-# Correct exit code from this test script
-# will then be '1' instead of '0'
-declare interactive="${TEST_INTERACTIVE:-0}";
-
-function result() {
-  local level="${1}";
-  shift;
-  local line="${@}";
-
-  case "${level}" in
-    ok)
-      echo -e "\t\033[32mOK: ${line}\033[0m";
-      ;;
-    fail)
-      echo -e "\t\033[31mFAIL: ${line}\033[0m";
-      echo -e "Abandoning tests due to failure";
-      exit 1;
-      ;;
-    *)
-      echo "UWOTM8?!";
-      exit 1;
-      ;;
-  esac;
+export function configureLogger() {
+  return winston.createLogger({
+    level: 'info',
+    format: winston.format.json(),
+    transports: [
+      new winston.transports.Console(),
+      new winston.transports.File({ filename: process.env.LOG_FILE_PATH }),
+    ],
+  });
 }
 
-sudo rm -f "/tmp/${0}.log";
-sudo rm -f "/tmp/${0}.log.json";
-
-source log.sh;
-
-declare random_string="$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1)";
-declare stdout;
-declare fileout;
-declare jsonout;
-declare syslogout;
-
-declare BASHLOG_FILE=1;
-declare BASHLOG_JSON=1;
-declare BASHLOG_SYSLOG=1;
-
-##
-# INFO
-##
-
-echo "Testing 'info'";
-
-rm -f "/tmp/${0}.log";
-rm -f "/tmp/${0}.log.json";
-
-BASHLOG_FILE=1;
-BASHLOG_JSON=1;
-BASHLOG_SYSLOG=1;
-DEBUG=0;
-
-stdout="$(log 'info' "${random_string}")";
-fileout="$(tail -n1 /tmp/${0}.log)";
-jsonout="$(tail -n1 /tmp/${0}.log.json)";
-syslogout="$(sudo tail -n1 /var/log/messages)";
-
-grep -q -E $'^\033\[32m[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} \[INFO\] '"${random_string}"$'\033\[0m$' <<<"${stdout}" \
-  && result ok 'info -> stdout' \
-  || result fail 'info -> stdout';
-
-grep -q -E "^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} \[INFO\] ${random_string}$" <<<"${fileout}" \
-  && result ok 'info -> file' \
-  || result fail 'info -> file';
-
-grep -q -E '^{"timestamp":"[0-9]{10}","level":"info","message":"'"${random_string}"'"}$' <<<"${jsonout}" \
-  && result ok 'info -> json file' \
-  || result fail 'info -> json file';
-
-grep -q -E "$(basename ${0})\[${$}\]: INFO: ${random_string}$" <<<"${syslogout}" \
-  && result ok 'info -> syslog (/var/log/messages)' \
-  || result fail 'info -> syslog (/var/log/messages)';
-
-##
-# WARN
-##
-
-echo "Testing 'warn'";
-
-rm -f "/tmp/${0}.log";
-rm -f "/tmp/${0}.log.json";
-
-BASHLOG_FILE=1;
-BASHLOG_JSON=1;
-BASHLOG_SYSLOG=1;
-DEBUG=0;
-
-stdout="$(log 'warn' "${random_string}")";
-fileout="$(tail -n1 /tmp/${0}.log)";
-jsonout="$(tail -n1 /tmp/${0}.log.json)";
-syslogout="$(sudo tail -n1 /var/log/syslog)";
-
-grep -q -E $'^\033\[33m[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} \[WARN\] '"${random_string}"$'\033\[0m$' <<<"${stdout}" \
-  && result ok 'warn -> stdout' \
-  || result fail 'warn -> stdout';
-
-grep -q -E "^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} \[WARN\] ${random_string}$" <<<"${fileout}" \
-  && result ok 'warn -> file' \
-  || result fail 'warn -> file';
-
-grep -q -E '^{"timestamp":"[0-9]{10}","level":"warn","message":"'"${random_string}"'"}$' <<<"${jsonout}" \
-  && result ok 'warn -> json file' \
-  || result fail 'warn -> json file';
-
-grep -q -E "$(basename ${0})\[${$}\]: WARN: ${random_string}$" <<<"${syslogout}" \
-  && result ok 'warn -> syslog (/var/log/syslog)' \
-  || result fail 'warn -> syslog (/var/log/syslog)';
-
-##
-# ERROR
-##
-
-echo "Testing: 'error'";
-
-rm -f "/tmp/${0}.log";
-rm -f "/tmp/${0}.log.json";
-
-BASHLOG_FILE=1;
-BASHLOG_JSON=1;
-BASHLOG_SYSLOG=1;
-DEBUG=0;
-
-stderr="$(log 'error' "${random_string}" 2>&1 1>/dev/null)";
-fileout="$(tail -n1 /tmp/${0}.log)";
-jsonout="$(tail -n1 /tmp/${0}.log.json)";
-syslogout="$(sudo tail -n1 /var/log/syslog)";
-
-grep -q -E $'^\033\[31m[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} \[ERROR\] '"${random_string}"$'\033\[0m$' <<<"${stderr}" \
-  && result ok 'error -> stderr' \
-  || result fail 'error -> stderr';
-
-grep -q -E "^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} \[ERROR\] ${random_string}$" <<<"${fileout}" \
-  && result ok 'error -> file' \
-  || result fail 'error -> file';
-
-grep -q -E '^{"timestamp":"[0-9]{10}","level":"error","message":"'"${random_string}"'"}$' <<<"${jsonout}" \
-  && result ok 'error -> json file' \
-  || result fail 'error -> json file';
-
-grep -q -E "$(basename ${0})\[${$}\]: ERROR: ${random_string}$" <<<"${syslogout}" \
-  && result ok 'error -> syslog (/var/log/syslog)' \
-  || result fail 'error -> syslog (/var/log/syslog)';
-
-##
-# DEBUG OFF
-##
-
-echo "Testing 'debug', DEBUG=0";
-
-rm -f "/tmp/${0}.log";
-rm -f "/tmp/${0}.log.json";
-
-BASHLOG_FILE=1;
-BASHLOG_JSON=1;
-BASHLOG_SYSLOG=1;
-DEBUG=0;
-
-# If there's no output, there'll be no file
-touch "/tmp/${0}.log";
-touch "/tmp/${0}.log.json";
-
-stdout="$(log 'debug' "${random_string}")";
-fileout="$(tail -n1 /tmp/${0}.log)";
-jsonout="$(tail -n1 /tmp/${0}.log.json)";
-syslogout="$(sudo tail -n1 /var/log/debug)";
-
-grep -q -E $'^\033\[34m[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} \[DEBUG\] '"${random_string}"$'\033\[0m$' <<<"${stdout}" \
-  && result fail 'debug -> stdout' \
-  || result ok 'debug -> stdout';
-
-grep -q -E "^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} \[DEBUG\] ${random_string}$" <<<"${fileout}" \
-  && result fail 'debug -> file' \
-  || result ok 'debug -> file';
-
-grep -q -E '^{"timestamp":"[0-9]{10}","level":"debug","message":"'"${random_string}"'"}$' <<<"${jsonout}" \
-  && result fail 'debug -> json file' \
-  || result ok 'debug -> json file';
-
-grep -q -E "$(basename ${0})\[${$}\]: DEBUG: ${random_string}$" <<<"${syslogout}" \
-  && result fail 'debug -> syslog (/var/log/debug)' \
-  || result ok 'debug -> syslog (/var/log/debug)';
-
-##
-# DEBUG ON
-##
-
-echo "Testing 'debug', DEBUG=1";
-
-rm -f "/tmp/${0}.log";
-rm -f "/tmp/${0}.log.json";
-
-BASHLOG_FILE=1;
-BASHLOG_JSON=1;
-BASHLOG_SYSLOG=1;
-DEBUG=1;
-
-stdout="$(log 'debug' "${random_string}")";
-fileout="$(tail -n1 /tmp/${0}.log)";
-jsonout="$(tail -n1 /tmp/${0}.log.json)";
-syslogout="$(sudo tail -n1 /var/log/debug)";
-
-grep -q -E $'^\033\[34m[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} \[DEBUG\] '"${random_string}"$'\033\[0m$' <<<"${stdout}" \
-  && result ok 'debug -> stdout' \
-  || result fail 'debug -> stdout';
-
-grep -q -E "^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} \[DEBUG\] ${random_string}$" <<<"${fileout}" \
-  && result ok 'debug -> file' \
-  || result fail 'debug -> file';
-
-grep -q -E '^{"timestamp":"[0-9]{10}","level":"debug","message":"'"${random_string}"'"}$' <<<"${jsonout}" \
-  && result ok 'debug -> json file' \
-  || result fail 'debug -> json file';
-
-grep -q -E "$(basename ${0})\[${$}\]: DEBUG: ${random_string}$" <<<"${syslogout}" \
-  && result ok 'debug -> syslog (/var/log/debug)' \
-  || result fail 'debug -> syslog (/var/log/debug)';
-
-##
-# BAD LEVEL, DEBUG OFF
-##
-
-echo "Testing: BAD LEVEL ('snooch'), DEBUG=0";
-
-rm -f "/tmp/${0}.log";
-rm -f "/tmp/${0}.log.json";
-
-BASHLOG_FILE=1;
-BASHLOG_JSON=1;
-BASHLOG_SYSLOG=1;
-DEBUG=0;
-
-stderr="$(log 'snooch' "${random_string}" 2>&1 1>/dev/null)";
-fileout="$(tail -n1 /tmp/${0}.log)";
-jsonout="$(tail -n1 /tmp/${0}.log.json)";
-syslogout="$(sudo tail -n1 /var/log/syslog)";
-
-grep -q -E $'^\033\[31m[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} \[ERROR\] Undefined log level trying to log: '"${random_string}"$'\033\[0m$' <<<"${stderr}" \
-  && result ok 'snooch -> stderr' \
-  || result fail 'snooch -> stderr';
-
-grep -q -E "^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} \[ERROR\] Undefined log level trying to log: ${random_string}$" <<<"${fileout}" \
-  && result ok 'snooch -> file' \
-  || result fail 'snooch -> file';
-
-grep -q -E '^{"timestamp":"[0-9]{10}","level":"error","message":"Undefined log level trying to log: '"${random_string}"'"}$' <<<"${jsonout}" \
-  && result ok 'snooch -> json file' \
-  || result fail 'snooch -> json file';
-
-grep -q -E "$(basename ${0})\[${$}\]: ERROR: Undefined log level trying to log: ${random_string}$" <<<"${syslogout}" \
-  && result ok 'snooch -> syslog (/var/log/syslog)' \
-  || result fail 'snooch -> syslog (/var/log/syslog)';
-
-##
-# BAD LEVEL, DEBUG ON
-##
-
-echo "Testing: BAD LEVEL ('snooch'), DEBUG=1";
-
-rm -f "/tmp/${0}.log";
-rm -f "/tmp/${0}.log.json";
-
-BASHLOG_FILE=1;
-BASHLOG_JSON=1;
-BASHLOG_SYSLOG=1;
-DEBUG=1;
-
-stderr="$(echo | log 'snooch' "${random_string}" 2>&1 1>/dev/null)";
-fileout="$(tail -n1 /tmp/${0}.log)";
-jsonout="$(tail -n1 /tmp/${0}.log.json)";
-syslogout="$(sudo tail -n1 /var/log/syslog)";
-
-grep -q -E $'^\033\[31m[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} \[ERROR\] Undefined log level trying to log: '"${random_string}"$'\033\[0m$' <<<"${stderr}" \
-  && result ok 'snooch -> stderr' \
-  || result fail 'snooch -> stderr';
-
-grep -q -E "^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} \[ERROR\] Undefined log level trying to log: ${random_string}$" <<<"${fileout}" \
-  && result ok 'snooch -> file' \
-  || result fail 'snooch -> file';
-
-grep -q -E '^{"timestamp":"[0-9]{10}","level":"error","message":"Undefined log level trying to log: '"${random_string}"'"}$' <<<"${jsonout}" \
-  && result ok 'snooch -> json file' \
-  || result fail 'snooch -> json file';
-
-grep -q -E "$(basename ${0})\[${$}\]: ERROR: Undefined log level trying to log: ${random_string}$" <<<"${syslogout}" \
-  && result ok 'snooch -> syslog (/var/log/syslog)' \
-  || result fail 'snooch -> syslog (/var/log/syslog)';
-
-##
-# INFO, FILE IO EXCEPTION, DEBUG OFF
-##
-
-echo "Testing: 'info', IO Exception (file), DEBUG=0";
-
-rm -f "/tmp/${0}.log";
-
-BASHLOG_FILE=1;
-BASHLOG_JSON=0;
-BASHLOG_SYSLOG=0;
-DEBUG=0;
-
-sudo touch "/tmp/${0}.log";
-
-stderr="$(log 'info' "${random_string}" 2>&1 1>/dev/null)";
-
-sudo rm -f "/tmp/${0}.log";
-
-grep -q -E $'^./log.sh: line [0-9]+: /tmp/'"$(basename ${0})"'.log: Permission denied' <<<"${stderr}" \
-  && grep -q -E $'\033\[31m[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} \[ERROR\] Logging Exception: echo -e "[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} \[INFO\] '"${random_string}"'" >> "/tmp/'"$(basename ${0})"$'.log"\033\[0m$' <<<"${stderr}" \
-  && result ok 'info -> file, Permission denied -> stderr' \
-  || result fail 'info -> file, Permission denied -> stderr';
-
-##
-# INFO, FILE IO EXCEPTION, DEBUG ON
-##
-
-echo "Testing: 'info', IO Exception (file), DEBUG=1";
-
-rm -f "/tmp/${0}.log";
-
-BASHLOG_FILE=1;
-BASHLOG_JSON=0;
-BASHLOG_SYSLOG=0;
-DEBUG=1;
-
-sudo touch "/tmp/${0}.log";
-
-stderr="$(echo | log 'info' "${random_string}" 2>&1 1>/dev/null)";
-
-sudo rm -f "/tmp/${0}.log";
-
-grep -q -E $'^./log.sh: line [0-9]+: /tmp/'"$(basename ${0})"'.log: Permission denied' <<<"${stderr}" \
-  && grep -q -E $'\033\[31m[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} \[ERROR\] Logging Exception: echo -e "[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} \[INFO\] '"${random_string}"'" >> "/tmp/'"$(basename ${0})"$'.log"\033\[0m$' <<<"${stderr}" \
-  && result ok 'info -> file, Permission denied -> stderr' \
-  || result fail 'info -> file, Permission denied -> stderr';
-
-##
-# INFO, JSON FILE IO EXCEPTION, DEBUG OFF
-##
-
-echo "Testing: 'info', IO Exception (json), DEBUG=0";
-
-rm -f "/tmp/${0}.log.json";
-
-BASHLOG_FILE=0;
-BASHLOG_JSON=1;
-BASHLOG_SYSLOG=0;
-DEBUG=0;
-
-sudo touch "/tmp/${0}.log.json";
-
-stderr="$(log 'info' "${random_string}" 2>&1 1>/dev/null)";
-
-sudo rm -f "/tmp/${0}.log.json";
-
-grep -q -E $'^./log.sh: line [0-9]+: /tmp/'"$(basename ${0})"'.log.json: Permission denied' <<<"${stderr}" \
-  && grep -q -E $'\033\[31m[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} \[ERROR\] Logging Exception: echo -e "{"timestamp":"[0-9]{10}","level":"info","message":"'"${random_string}"'"}" >> "/tmp/'"$(basename ${0})"$'.log.json"\033\[0m$' <<<"${stderr}" \
-  && result ok 'info -> file, Permission denied -> stderr' \
-  || result fail 'info -> file, Permission denied -> stderr';
-
-##
-# INFO, JSON FILE IO EXCEPTION, DEBUG ON
-##
-
-echo "Testing: 'info', IO Exception (json), DEBUG=1";
-
-rm -f "/tmp/${0}.log.json";
-
-BASHLOG_FILE=0;
-BASHLOG_JSON=1;
-BASHLOG_SYSLOG=0;
-DEBUG=1;
-
-sudo touch "/tmp/${0}.log.json";
-
-stderr="$(echo | log 'info' "${random_string}" 2>&1 1>/dev/null)";
-
-sudo rm -f "/tmp/${0}.log.json";
-
-grep -q -E $'^./log.sh: line [0-9]+: /tmp/'"$(basename ${0})"'.log.json: Permission denied' <<<"${stderr}" \
-  && grep -q -E $'\033\[31m[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} \[ERROR\] Logging Exception: echo -e "{"timestamp":"[0-9]{10}","level":"info","message":"'"${random_string}"'"}" >> "/tmp/'"$(basename ${0})"$'.log.json"\033\[0m$' <<<"${stderr}" \
-  && result ok 'info -> file, Permission denied -> stderr' \
-  || result fail 'info -> file, Permission denied -> stderr';
-
-##
-# WARN, FILE IO EXCEPTION, DEBUG OFF
-##
-
-echo "Testing: 'warn', IO Exception (file), DEBUG=0";
-
-rm -f "/tmp/${0}.log";
-
-BASHLOG_FILE=1;
-BASHLOG_JSON=0;
-BASHLOG_SYSLOG=0;
-DEBUG=0;
-
-sudo touch "/tmp/${0}.log";
-
-stderr="$(log 'warn' "${random_string}" 2>&1 1>/dev/null)";
-
-sudo rm -f "/tmp/${0}.log";
-
-grep -q -E $'^./log.sh: line [0-9]+: /tmp/'"$(basename ${0})"'.log: Permission denied' <<<"${stderr}" \
-  && grep -q -E $'\033\[31m[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} \[ERROR\] Logging Exception: echo -e "[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} \[WARN\] '"${random_string}"'" >> "/tmp/'"$(basename ${0})"$'.log"\033\[0m$' <<<"${stderr}" \
-  && result ok 'warn -> file, Permission denied -> stderr' \
-  || result fail 'warn -> file, Permission denied -> stderr';
-
-##
-# ERROR, FILE IO EXCEPTION, DEBUG OFF
-##
-
-echo "Testing: 'error', IO Exception (file), DEBUG=0";
-
-rm -f "/tmp/${0}.log";
-
-BASHLOG_FILE=1;
-BASHLOG_JSON=0;
-BASHLOG_SYSLOG=0;
-DEBUG=0;
-
-sudo touch "/tmp/${0}.log";
-
-stderr="$(log 'error' "${random_string}" 2>&1 1>/dev/null)";
-
-sudo rm -f "/tmp/${0}.log";
-
-grep -q -E $'^./log.sh: line [0-9]+: /tmp/'"$(basename ${0})"'.log: Permission denied' <<<"${stderr}" \
-  && grep -q -E $'\033\[31m[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} \[ERROR\] Logging Exception: echo -e "[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} \[ERROR\] '"${random_string}"'" >> "/tmp/'"$(basename ${0})"$'.log"\033\[0m$' <<<"${stderr}" \
-  && result ok 'error -> file, Permission denied -> stderr' \
-  || result fail 'error -> file, Permission denied -> stderr';
-
-##
-# INTERACTIVE DEBUG
-##
-
-if [ "${interactive}" -eq 1 ]; then
-
-  echo "Testing: Debug Interaction, DEBUG=1";
-
-  BASHLOG_FILE=0;
-  BASHLOG_JSON=0;
-  BASHLOG_SYSLOG=0;
-  DEBUG=1;
-
-  echo -e "\n\t\033[32mLogging a normal successful debug message to stdout\033[0m";
-  log 'debug' 'A normal successful debug message';
-
-  echo -e "\n\t\033[32mLogging an error message to stdout that should provide a debug shell\n\tExit the shell with ^D, 'exit 0' or 'exit'.\n\tIf you exit with a non-zero code, testing will be abandoned, this script will exit without further warning.\033[0m";
-  log 'error' 'An error message';
-
-  result ok 'Interactive Shell. We have errored and continued.';
-
-  echo -e "\n\t\033[32mLogging an error message to stdout that should provide a debug shell\n\tExit the shell with 'exit 1' or a non-zero code of your choice.\n\tThe test is successful if this script exits with the same code\033[0m";
-  log 'error' 'An error message';
-
-  result fail 'Interactive Shell. This script should have exited with a non-zero code';
-
-fi;
-
-exit 0;
-
-// ./build.bashlog
-
-##############################################################################
-#
-# Bashlog - a simple logging library for use in bash scripts.
-#
-# Copyright 2014 Kevin L Hochhalter <klhochhalter@gmail.com>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Lesser General Public License as published
-# by the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Lesser General Public License for more details.
-#
-# You should have received a copy of the GNU Lesser General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
-#
-##############################################################################
-
-#################
-# begin bashlog #
-#################
-
-trap '7>&-' EXIT
-
-# Set BL_LOG_TAG to the default if LOG_TAG has not been specified.
-declare -r BL_LOG_TAG=${LOG_TAG:=`basename $0`}
-
-# Set  BL_DATETIME_FORMAT to the default if DATETIME_FORMAT
-# has not been specified.
-declare -r BL_DATETIME_FORMAT=${DATETIME_FORMAT:-"+%FT%T%:z"}
-# echo "1 BL_DATETIME_FORMAT: $BL_DATETIME_FORMAT"
-# default BL_LEVEL to INFO if LOG_LEVEL is not set.
-declare -u BL_LEVEL=${LOG_LEVEL:='INFO'}
-
-if [ -z "$LOG_FILE" ] && [ -z "$SYSLOG_FACILITY" ]; then
-    echo "You must specify a LOG_FILE path or SYSLOG_FACILITY name." >&2
-    echo "Logging to STDERR by default." >&2
-    LOG_FILE='STDERR'
-fi
-
-if [ -n "$LOG_FILE" ] && [ -n "$SYSLOG_FACILITY" ]; then
-    echo "You must specify a LOG_FILE path or SYSLOG_FACILITY name, but not both." >&2
-    echo "Logging to STDERR by default." >&2
-    LOG_FILE='STDERR'
-fi
-
-if [ -n "$LOG_FILE" ]; then
-
-    # Set SYSLOG_FACILITY to an empty string, since we don't
-    # log both to syslog and a file.
-    SYSLOG_FACILITY=""
-
-    if [ "$LOG_FILE" != "STDERR" ]; then
-        c0=`touch "$LOG_FILE" 2>&1`
-        if [ $? -ne 0 ]; then
-            echo "Could not create $LOG_FILE." >&2
-            echo "Logging to STDERR by default." >&2
-            LOG_FILE="STDERR"
-        fi
-    fi
-
-    if [ "$LOG_FILE" = "STDERR" ]; then
-        exec 7>&2
-    else
-        declare -r BL_LOG_FILE=$LOG_FILE
-        exec 7>> $BL_LOG_FILE
-    fi
-
-fi
-
-if [ -n "$SYSLOG_FACILITY" ]; then
-    if [[ "$SYSLOG_FACILITY" != local[0-7] ]]; then
-        echo "Only facilities local0 through local7 are supported for syslog." >&2
-        echo "Logging to local0 by default." >&2
-        SYSLOG_FACILITY='local0'
-    fi
-    declare -lr BL_SYSLOG_FACILITY=$SYSLOG_FACILITY
-fi
-
-# Log (severity) levels are taken from python and RFC 5424.
-declare -A bl_log_level
-declare -A bl_syslog_severity
-
-# These are the python numeric log levels, with the addition
-# of RFC 5424 levels. The RFC 5424 levels have been given
-# numbers to sequence them with the python levels.
-bl_log_level[DEBUG]=10
-bl_log_level[INFO]=20
-bl_log_level[NOTICE]=25 # RFC 5424 specific
-bl_log_level[WARN]=30
-bl_log_level[WARNING]=30
-bl_log_level[ERR]=40
-bl_log_level[ERROR]=40
-bl_log_level[CRIT]=50
-bl_log_level[CRITICAL]=50
-bl_log_level[ALERT]=60 # RFC 5424 specific
-bl_log_level[EMERG]=70 # RFC 5424 specific
-bl_log_level[EMERGENCY]=70 # RFC 5424 specific
-declare -r bl_log_level
-
-if [ -z "${bl_log_level[$BL_LEVEL]}" ]; then
-    echo "\"$BL_LEVEL\" is not a valid LOG_LEVEL at line ${BASH_LINENO[0]}. Defaulting to \"INFO\"." >&2
-    BL_LEVEL="INFO"
-fi
-
-declare -r BL_LEVEL
-
-# These are the RFC 5424 numeric severity levels.
-bl_syslog_severity[DEBUG]=7
-bl_syslog_severity[INFO]=6
-bl_syslog_severity[NOTICE]=5
-bl_syslog_severity[WARN]=4
-bl_syslog_severity[WARNING]=4
-bl_syslog_severity[ERR]=3
-bl_syslog_severity[ERROR]=3
-bl_syslog_severity[CRIT]=2
-bl_syslog_severity[CRITICAL]=2
-bl_syslog_severity[ALERT]=1
-bl_syslog_severity[EMERG]=0
-bl_syslog_severity[EMERGENCY]=0
-declare -r bl_syslog_severity
-
-_bashlog ()
-{
-    #echo "1.5  BL_DATETIME_FORMAT: $BL_DATETIME_FORMAT"
-
-    local BL_DATE
-    local BL_MESSAGE
-    local BL_MESSAGE_LEVEL
-    local BL_RESET_IFS
-    local BL_LOG_LINE
-    local BL_NUM_LOG_LEVEL
-    local IFS # Must be local to the function.
-
-    BL_NUM_LOG_LEVEL=${bl_log_level[$BL_LEVEL]}
-
-    declare -u BL_MESSAGE_LEVEL=$1
-
-    if [ -z "${bl_log_level[$BL_MESSAGE_LEVEL]}" ]; then
-        echo "\"${BL_MESSAGE_LEVEL}\" is not a valid MESSAGE_LOG_LEVEL at line ${BASH_LINENO[0]}. Defaulting to \"INFO\"." >&2
-        BL_MESSAGE_LEVEL="INFO"
-    fi
-
-    BL_MESSAGE=$2
-
-    IFS=$'\n'
-#echo "2 BL_DATETIME_FORMAT: $BL_DATETIME_FORMAT"
-    BL_DATE=`date "${BL_DATETIME_FORMAT}"`
-
-    if [ ${bl_log_level[$BL_MESSAGE_LEVEL]} -ge $BL_NUM_LOG_LEVEL ]; then
-        if [ -n "$BL_SYSLOG_FACILITY" ]; then
-            for BL_LOG_LINE in $BL_MESSAGE; do
-                logger -i \
-                    -t "$BL_LOG_TAG" \
-                    -p "${BL_SYSLOG_FACILITY}.${bl_syslog_severity[$BL_MESSAGE_LEVEL]}" \
-                    "$BL_MESSAGE_LEVEL: $BL_LOG_LINE"
-            done
-        else
-            for BL_LOG_LINE in $BL_MESSAGE; do
-                printf -v BL_MESSAGE_LINE "%s %s[%s] %s: %s" \
-                    "$BL_DATE" \
-                    "$BL_LOG_TAG" \
-                    "$$" \
-                    "$BL_MESSAGE_LEVEL" \
-                    "$BL_LOG_LINE"
-                echo "$BL_MESSAGE_LINE" >&7
-            done
-        fi
-    fi
-
+// ./models/SearchResult.ts
+
+import { Model, DataTypes } from 'sequelize';
+import sequelize from '../db'; // Import your Sequelize instance
+
+class SearchResult extends Model {
+  public id!: number;
+  public searchId!: number;
+  public position!: string;
+  public company!: string;
+  public location!: string;
+  public date!: string;
+  public salary!: string;
+  public jobUrl!: string;
 }
 
-###############
-# end bashlog #
-###############
+SearchResult.init(
+  {
+    id: {
+      type: DataTypes.INTEGER,
+      primaryKey: true,
+      autoIncrement: true,
+    },
+    searchId: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+    },
+    position: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    company: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    location: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    date: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    salary: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    jobUrl: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+  },
+  {
+    sequelize,
+    modelName: 'SearchResult',
+  }
+);
 
-// ./build.log.sh
+export default SearchResult;
 
-#!/bin/bash
+// ./models/SearchDefinition.ts
 
-set -uo pipefail;
+import { Model, DataTypes } from 'sequelize';
+import sequelize from '../db'; // Import your Sequelize instance
 
-function _log_exception() {
-  (
-    BASHLOG_FILE=0;
-    BASHLOG_JSON=0;
-    BASHLOG_SYSLOG=0;
-
-    log 'error' "Logging Exception: ${@}";
-  );
+class SearchDefinition extends Model {
+  public id!: number;
+  public keyword!: string;
+  public location!: string;
+  public refreshInterval!: number;
 }
 
-function log() {
-  local date_format="${BASHLOG_DATE_FORMAT:-+%F %T}";
-  local date="$(date "${date_format}")";
-  local date_s="$(date "+%s")";
+SearchDefinition.init(
+  {
+    id: {
+      type: DataTypes.INTEGER,
+      primaryKey: true,
+      autoIncrement: true,
+    },
+    keyword: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    location: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    refreshInterval: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+    },
+  },
+  {
+    sequelize,
+    modelName: 'SearchDefinition',
+  }
+);
 
-  local file="${BASHLOG_FILE:-0}";
-  local file_path="${BASHLOG_FILE_PATH:-/tmp/$(basename "${0}").log}";
+export default SearchDefinition;
 
-  local json="${BASHLOG_JSON:-0}";
-  local json_path="${BASHLOG_JSON_PATH:-/tmp/$(basename "${0}").log.json}";
+// ./types.ts
 
-  local syslog="${BASHLOG_SYSLOG:-0}";
-  local tag="${BASHLOG_SYSLOG_TAG:-$(basename "${0}")}";
-  local facility="${BASHLOG_SYSLOG_FACILITY:-local0}";
-  local pid="${$}";
-
-  local level="${1}";
-  local upper="$(echo "${level}" | awk '{print toupper($0)}')";
-  local debug_level="${DEBUG:-0}";
-
-  shift 1;
-
-  local line="${@}";
-
-  # RFC 5424
-  #
-  # Numerical         Severity
-  #   Code
-  #
-  #    0       Emergency: system is unusable
-  #    1       Alert: action must be taken immediately
-  #    2       Critical: critical conditions
-  #    3       Error: error conditions
-  #    4       Warning: warning conditions
-  #    5       Notice: normal but significant condition
-  #    6       Informational: informational messages
-  #    7       Debug: debug-level messages
-
-  local -A severities;
-  severities['DEBUG']=7;
-  severities['INFO']=6;
-  severities['NOTICE']=5; # Unused
-  severities['WARN']=4;
-  severities['ERROR']=3;
-  severities['CRIT']=2;   # Unused
-  severities['ALERT']=1;  # Unused
-  severities['EMERG']=0;#  # Unused
-
-  local severity="${severities[${upper}]:-3}"
-
-  if [ "${debug_level}" -gt 0 ] || [ "${severity}" -lt 7 ]; then
-
-    if [ "${syslog}" -eq 1 ]; then
-      local syslog_line="${upper}: ${line}";
-
-      logger \
-        --id="${pid}" \
-        -t "${tag}" \
-        -p "${facility}.${severity}" \
-        "${syslog_line}" \
-        || _log_exception "logger --id=\"${pid}\" -t \"${tag}\" -p \"${facility}.${severity}\" \"${syslog_line}\"";
-    fi;
-
-    if [ "${file}" -eq 1 ]; then
-      local file_line="${date} [${upper}] ${line}";
-      echo -e "${file_line}" >> "${file_path}" \
-        || _log_exception "echo -e \"${file_line}\" >> \"${file_path}\"";
-    fi;
-
-    if [ "${json}" -eq 1 ]; then
-      local json_line="$(printf '{"timestamp":"%s","level":"%s","message":"%s"}' "${date_s}" "${level}" "${line}")";
-      echo -e "${json_line}" >> "${json_path}" \
-        || _log_exception "echo -e \"${json_line}\" >> \"${json_path}\"";
-    fi;
-
-  fi;
-
-  local -A colours;
-  colours['DEBUG']='\033[34m'  # Blue
-  colours['INFO']='\033[32m'   # Green
-  colours['NOTICE']=''         # Unused
-  colours['WARN']='\033[33m'   # Yellow
-  colours['ERROR']='\033[31m'  # Red
-  colours['CRIT']=''           # Unused
-  colours['ALERT']=''          # Unused
-  colours['EMERG']=''          # Unused
-  colours['DEFAULT']='\033[0m' # Default
-
-  local norm="${colours['DEFAULT']}";
-  local colour="${colours[${upper}]:-\033[31m}";
-
-  local std_line="${colour}${date} [${upper}] ${line}${norm}";
-
-  # Standard Output (Pretty)
-  case "${level}" in
-    'info'|'warn')
-      echo -e "${std_line}";
-      ;;
-    'debug')
-      if [ "${debug_level}" -gt 0 ]; then
-        echo -e "${std_line}";
-      fi;
-      ;;
-    'error')
-      echo -e "${std_line}" >&2;
-      if [ "${debug_level}" -gt 0 ]; then
-        echo -e "Here's a shell to debug with. 'exit 0' to continue. Other exit codes will abort - parent shell will terminate.";
-        bash || exit "${?}";
-      fi;
-      ;;
-    *)
-      log 'error' "Undefined log level trying to log: ${@}";
-      ;;
-  esac
+export interface JobListing {
+  position: string;
+  company: string;
+  location: string;
+  date: string;
+  salary: string;
+  jobUrl: string;
 }
 
-declare prev_cmd="null";
-declare this_cmd="null";
-trap 'prev_cmd=$this_cmd; this_cmd=$BASH_COMMAND' DEBUG \
-  && log debug 'DEBUG trap set' \
-  || log error 'DEBUG trap failed to set';
-
-# This is an option if you want to log every single command executed,
-# but it will significantly impact script performance and unit tests will fail
-
-#trap 'prev_cmd=$this_cmd; this_cmd=$BASH_COMMAND; log debug $this_cmd' DEBUG \
-#  && log debug 'DEBUG trap set' \
-#  || log error 'DEBUG trap failed to set';
-
-// ./build.variables
-
-
-binaryRequirements=(
-            brew
-            awscli
-            jq
-            yq
-            blessclient
-            gimme-aws-creds
-            )
-
-tapRequirements=(
-                chanzuckerberg/tap
-              # chanzuckerberg2/tap
-
-                )
-bash_debug="${bash_debug:-0}"
-
-privateKeyLocation="${privateKeyLocation-"~/.ssh/id_rsa"}"
-
-defaultBlessRegion="${defaultBlessRegion:-us-west-2}"
-awsRedshiftRegion="${awsRedshiftRegion:-us-east-1}"
-
-defaultAwsCredentialsConfigFile="credentials"
-defaultAwsCredentialsConfigPath="$HOME/.aws/"
-defaultAwsCredentialsConfigFullPath="${defaultAwsCredentialsConfigPath}${defaultAwsCredentialsConfigFile}"
-
-defaultBlessClientConfigFile="config.yml"
-defaultBlessClientConfigPath="$HOME/.blessclient/"
-defaultBlessClientConfigFullPath="${defaultBlessClientConfigPath}${defaultBlessClientConfigFile}"
-
-defaultBlessAwsConfigFile="config-blessclient"
-defaultBlessAwsConfigPath="$HOME/.aws/"
-defaultBlessAwsConfigFullPath="${defaultBlessAwsConfigPath}${defaultBlessAwsConfigFile}"
-
-defaultGimmeCredsConfigFile=".okta_aws_login_config"
-defaultGimmeCredsConfigPath="$HOME/"
-defaultGimmeCredsConfigFullPath="${defaultGimmeCredsConfigPath}${defaultGimmeCredsConfigFile}"
-
-defaultAwsRdsCaBundleFile="rds-combined-ca-bundle.pem"
-defaultAwsRdsCaBundlePath="$HOME/"
-defaultAwsRdsCaBundleFullPath="${defaultAwsRdsCaBundlePath}${defaultAwsRdsCaBundleFile}"
-
-blessConfigFiles=( \
-
-	"${defaultBlessAwsConfigFullPath}"       \
-  "${defaultAwsCredentialsConfigFullPath}" \
-  "${defaultBlessClientConfigFullPath}"
-)
-
-gimmecredsConfigFiles=( \
-	"${defaultGimmeCredsConfigFullPath}"
-)
-
-AwsRdsCaBundleFiles=( \
-  "${defaultAwsRdsCaBundleFullPath}"
-)
-
-defaultAwsConfigPath="$HOME/.aws/"
-
-operationUseage=$(cat <<EOF
-
-Invalid operation. --operation must be set to one of the following functions:
-
-    --operation  install-dependencies                         Installs all dependencies used by
-                                                              this umay-auth suite
-
-    --operation  backup-configs                               Creates in place backups of all
-                                                              config files modified by the
-                                                              umay-auth suite
-
-    --operation  write-gimme-creds-config                     Generates the config files needed
-                                                              to run gimme-aws-creds
-
-    --operation  write-bless-config                           Generates the config files needed
-                                                              to run the Bless Client
-
-    --operation  write-all-configs                            Generates all config files
-                                                              supported by the umay-auth suite
-
-    --operation write-aws-rds-ca-bundle                       Installs the AWS RDS CA Bundle PEM
-                                                              files for secure access to RDS.
-
-    --operation aws-rds-mysql-login                           Installs the AWS RDS CA Bundle PEM
-                                                              files for secure access to RDS and logs into Mysql.
-
-    --operation aws-rds-postgresql-login                      Installs the AWS RDS CA Bundle PEM
-                                                              files for secure access to RDS and logs into Postgresql.
-
-    --operation aws-redshift-login                            Installs the AWS RDS CA Bundle PEM
-                                                              files for secure access to Redshift and logs into Redshift Cluster.
-
-EOF
-)
-
-generalUseage=$(cat <<EOF
-
-umay-auth:
-    a suite of tools to configure okta-based authentacion
-    for umay engineering resources
-
-        --email          An okta-registered email address
-
-        --key            The private key to configure for
-                         ssh access to bless enabled hosts
-
-        --operation      The operation to perform with
-                         this utility
-
-        --help           Print usage guidelines
-
-        --debug          Enable verbose output
-
-Example Usage:
-
-1. To Install all dependencies used by this umay-auth suite run the below command:
-
-./umay-auth.sh --email nagaraju.balusa@umay.io --operation install-dependencies
-
-2. To Generates all config files supported by the umay-auth suite run the below command:
-
-./umay-auth.sh --email nagaraju.balusa@umay.io --operation write-all-configs
-
-3. To Install the AWS RDS CA Bundle PEM files for secure access to RDS and logs into Mysql run the below command:
-
-./umay-auth.sh --email nagaraju.balusa@umay.io --operation write-aws-rds-ca-bundle-and-mysqlLogin
-
-4. Select EKS Cluster to get access to it
-
-./umay-auth.sh --operation switch-eks-cluster
-
-5. Retrive EKS Token
-
-./umay-auth.sh --operation get-eks-token
-
-EOF
-)
-
-// ./build.functions
-
-
-define_and_export_function() {
-    eval "$1"
-    local func_name
-    func_name=$(echo "$1" | awk '{print $1}')
-    export -f "$func_name"
+export interface QueryParams {
+  keyword?: string;
+  location?: string;
 }
 
+// ./index.ts
 
-requireBashFour() {
-  if [ -z "${BASH_VERSINFO}" ] ||
-     [ -z "${BASH_VERSINFO[0]}" ] ||
-     [ ${BASH_VERSINFO[0]} -lt 4 ]; then
-        echo "$(basename "$(test -L "$0" && readlink "$0" || echo "$0")") requires Bash version >= 4"
-       exit 1
-  fi
+import express from 'express';
+import { Sequelize } from 'sequelize';
+import * as dotenv from 'dotenv';
+import { createSearch, getAllSearches, updateSearch, deleteSearch } from './controllers/searchController';
+import { startMonitoringAllSearches } from './services/SearchManager';
+
+dotenv.config();
+
+const app = express();
+const port = process.env.PORT || 3000;
+
+// Middleware
+app.use(express.json());
+
+// Routes
+app.post('/search', createSearch);
+app.get('/search', getAllSearches);
+app.put('/search/:id', updateSearch);
+app.delete('/search/:id', deleteSearch);
+
+// Start the server
+app.listen(port, async () => {
+  console.log(`Server running on port ${port}`);
+  await startMonitoringAllSearches();
+});
+
+// ./config.ts
+
+import dotenv from 'dotenv';
+dotenv.config();
+
+export const dbConfig = {
+  username: process.env.DB_USERNAME || 'postgres',
+  password: process.env.DB_PASSWORD || '',
+  database: process.env.DB_NAME || 'job_service',
+  host: process.env.DB_HOST || 'localhost',
+  dialect: 'postgres',
+};
+
+// ./controllers/SearchController.ts
+
+// ./src/controllers/searchController.ts
+
+import { Request, Response } from 'express';
+import SearchDefinition from '../models/SearchDefinition';
+import { scheduleJob } from '../services/SearchManager';
+
+export const createSearch = async (req: Request, res: Response) => {
+  console.log('Received request to create search:', req.body); // Log request body
+
+  try {
+    const { keyword, location, refreshInterval } = req.body;
+    const newSearch = await SearchDefinition.create({ keyword, location, refreshInterval });
+    await scheduleJob(newSearch); // Schedule job for the new search
+    res.status(201).json({ message: 'Search created', data: newSearch });
+  } catch (error: any) {
+    console.error('Error creating search:', error); // Log the error
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const getAllSearches = async (req: Request, res: Response) => {
+  try {
+    const searches = await SearchDefinition.findAll();
+    res.status(200).json(searches);
+  } catch (error: any) {
+    console.error('Error fetching searches:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const updateSearch = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { keyword, location, refreshInterval } = req.body;
+    const search = await SearchDefinition.findByPk(id);
+
+    if (!search) {
+      return res.status(404).json({ error: 'Search not found' });
+    }
+
+    search.keyword = keyword || search.keyword;
+    search.location = location || search.location;
+    search.refreshInterval = refreshInterval || search.refreshInterval;
+    await search.save();
+    await scheduleJob(search); // Reschedule job with updated details
+    res.status(200).json(search);
+  } catch (error: any) {
+    console.error('Error updating search:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const deleteSearch = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const search = await SearchDefinition.findByPk(id);
+
+    if (!search) {
+      return res.status(404).json({ error: 'Search not found' });
+    }
+
+    await search.destroy();
+    res.status(200).json({ message: 'Search deleted' });
+  } catch (error: any) {
+    console.error('Error deleting search:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// ./server.ts
+
+import express from 'express';
+import bodyParser from 'body-parser';
+import searchRoutes from './routes/SearchRoutes';
+import sequelize from './db';
+import SearchDefinition from './models/SearchDefinition';
+import SearchResult from './models/SearchResult';
+import { startMonitoringAllSearches } from './services/SearchManager';
+
+sequelize.sync();
+
+const app = express();
+const port = process.env.PORT || 3000;
+
+app.use(bodyParser.json());
+
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.path}`);
+  next();
+});
+
+app.use('/api', searchRoutes);
+
+app.listen(port, async () => {
+  console.log(`Server is running on port ${port}`);
+  try {
+    await sequelize.authenticate();
+    await SearchDefinition.sync();
+    await SearchResult.sync();
+    await startMonitoringAllSearches();
+    console.log('Database connected and models synchronized');
+  } catch (error) {
+    console.error('Error connecting to the database:', error);
+  }
+});
+
+// ./db.ts
+
+// src/db.ts
+
+import { Sequelize } from 'sequelize';
+import { dbConfig } from './config';
+
+const sequelize = new Sequelize(dbConfig.database, dbConfig.username, dbConfig.password, {
+  host: dbConfig.host,
+  dialect: 'postgres',
+});
+
+export default sequelize;
+
+// ./routes/SearchRoutes.ts
+
+// src/routes/searchRoutes.ts
+
+import { Router } from 'express';
+import { getAllSearches, createSearch, updateSearch, deleteSearch } from '../controllers/SearchController';
+
+const router = Router();
+
+router.get('/searches', getAllSearches);
+router.post('/searches', createSearch);
+router.put('/searches/:id', updateSearch);
+router.delete('/searches/:id', deleteSearch);
+
+export default router;
+
+// ./services/SearchManager.ts
+
+// src/services/SearchManager.ts
+
+import nodeSchedule from 'node-schedule';
+import SearchDefinition from '../models/SearchDefinition';
+import SearchResult from '../models/SearchResult';
+import fetchJobListings from './LinkedInService';
+
+
+
+const jobs: { [key: number]: nodeSchedule.Job } = {};
+
+export const scheduleJob = async (search: SearchDefinition) => {
+  if (jobs[search.id]) {
+    jobs[search.id].cancel();
+  }
+
+  const job = nodeSchedule.scheduleJob(`*/${search.refreshInterval} * * * *`, async () => {
+    const jobListings = await fetchJobListings({
+      keyword: search.keyword,
+      location: search.location,
+    });
+
+    // Save job listings to the database
+    for (const listing of jobListings) {
+      await SearchResult.create({
+        searchId: search.id,
+        position: listing.position,
+        company: listing.company,
+        location: listing.location,
+        date: listing.date,
+        salary: listing.salary,
+        jobUrl: listing.jobUrl,
+      });
+    }
+  });
+
+  jobs[search.id] = job;
+};
+
+export const startMonitoringAllSearches = async () => {
+  const searches = await SearchDefinition.findAll();
+  searches.forEach(scheduleJob);
+};
+
+export const stopJob = (searchId: number) => {
+  if (jobs[searchId]) {
+    jobs[searchId].cancel();
+    delete jobs[searchId];
+  }
+};
+
+// ./services/LinkedInService.ts
+
+// src/services/LinkedInService.ts
+
+import { RestliClient } from 'linkedin-api-client';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const accessToken = process.env.ACCESS_TOKEN || process.env.LINKEDIN_ACCESS_TOKEN;
+
+if (!accessToken) {
+  throw new Error('Access token is not defined. Please check your environment variables.');
 }
 
-installHomebrew() {
-  echo -ne '\n' | /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)" >/dev/null
+const restliClient = new RestliClient();
+
+const fetchJobListings = async (queryObject: { keyword: string; location: string }) => {
+  try {
+    const response = await restliClient.get({
+      resourcePath: `jobSearch?q=jobs&keywords=${encodeURIComponent(queryObject.keyword)}&location=${encodeURIComponent(queryObject.location)}`,
+      accessToken: accessToken as string,
+    });
+    return response.data.elements;
+  } catch (error) {
+    console.error('Error fetching job listings:', error);
+    return [];
+  }
+};
+
+export default fetchJobListings;
+
+// ./utils/logger.ts
+
+import winston from 'winston';
+
+export function configureLogger() {
+  return winston.createLogger({
+    level: 'info',
+    format: winston.format.json(),
+    transports: [
+      new winston.transports.Console(),
+      new winston.transports.File({ filename: process.env.LOG_FILE_PATH }),
+    ],
+  });
 }
 
-requires() {
+// ./models/SearchResult.ts
 
-  local functionName debugOutput scriptName
-  #unset ${functionName} ${debugOutput}
-  scriptName="$(basename "$(test -L "$0" && readlink "$0" || echo "$0")")"
-  functionName="${FUNCNAME[0]}"
+import { Model, DataTypes } from 'sequelize';
+import sequelize from '../db'; // Import your Sequelize instance
 
-  while [[ ${1} ]]
-    do
-      case "${1}" in
-          --requirement)
-            requirement=${2}
-            shift
-            ;;
-          --debug)
-            debugOutput=1
-            ;;
-          *)
-            echo "Unknown parameter: ${1}" >&2
-            return 1
-            ;;
-          esac
-
-          if ! shift; then
-            echo 'Missing parameter argument.' >&2
-            return 1
-          fi
-    done
-
-    if [[ -z ${requirement} ]] \
-      ; then
-        echo "${functionName}: one or more required params are undefined"
-        return 1
-    fi
-
-    [[ debugOutput -gt 1 ]] && echo "[debug] scriptName: ${scriptName}"
-    [[ debugOutput -gt 1 ]] && echo "[debug] functionName: ${functionName}"
-
-    if [[ $(command -v ${requirement}) != *"${requirement}"* ]]; then
-      echo "installing ${requirement}"
-    fi
+class SearchResult extends Model {
+  public id!: number;
+  public searchId!: number;
+  public position!: string;
+  public company!: string;
+  public location!: string;
+  public date!: string;
+  public salary!: string;
+  public jobUrl!: string;
 }
 
+SearchResult.init(
+  {
+    id: {
+      type: DataTypes.INTEGER,
+      primaryKey: true,
+      autoIncrement: true,
+    },
+    searchId: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+    },
+    position: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    company: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    location: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    date: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    salary: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    jobUrl: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+  },
+  {
+    sequelize,
+    modelName: 'SearchResult',
+  }
+);
 
-requireTap() {
+export default SearchResult;
 
-  local functionName debugOutput scriptName
-  #unset ${functionName} ${debugOutput}
-  scriptName="$(basename "$(test -L "$0" && readlink "$0" || echo "$0")")"
-  functionName="${FUNCNAME[0]}"
+// ./models/SearchDefinition.ts
 
-  while [[ ${1} ]]
-    do
-      case "${1}" in
-          --tap)
-            tap=${2}
-            shift
-            ;;
-          --debug)
-            debugOutput=1
-            ;;
-          *)
-            echo "Unknown parameter: ${1}" >&2
-            return 1
-            ;;
-          esac
+import { Model, DataTypes } from 'sequelize';
+import sequelize from '../db'; // Import your Sequelize instance
 
-          if ! shift; then
-            echo 'Missing parameter argument.' >&2
-            return 1
-          fi
-    done
-
-    if [[ -z ${tap} ]] \
-      ; then
-        echo "${functionName}: one or more required params are undefined"
-        return 1
-    fi
-
-    [[ debugOutput -gt 1 ]] && echo "[debug] scriptName: ${scriptName}"
-    [[ debugOutput -gt 1 ]] && echo "[debug] functionName: ${functionName}"
-
-    if [[ $(brew tap) != *"${tap}"* ]]; then
-      brew tap "${tap}"
-    fi
-
+class SearchDefinition extends Model {
+  public id!: number;
+  public keyword!: string;
+  public location!: string;
+  public refreshInterval!: number;
 }
 
-renderAwsCredentialsConfig() {
+SearchDefinition.init(
+  {
+    id: {
+      type: DataTypes.INTEGER,
+      primaryKey: true,
+      autoIncrement: true,
+    },
+    keyword: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    location: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    refreshInterval: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+    },
+  },
+  {
+    sequelize,
+    modelName: 'SearchDefinition',
+  }
+);
 
-    # defaultAwsCredentialsConfig="~/.aws/credentials"
+export default SearchDefinition;
 
-  local localFunctionName debugOutput awsAccessKeyId awsSecretAccessKey awsSecurityToken awsSessionToken
+// ./types.ts
 
-  unset functionName debugOutput awsAccessKeyId awsSecretAccessKey awsSecurityToken awsSessionToken
-
-  localFunctionName="${FUNCNAME[0]}"
-
-  while [[ ${1} ]]; do
-    case "${1}" in
-    --awsAccessKeyId)
-      awsAccessKeyId=${2}
-      shift
-      ;;
-    --awsSecretAccessKey)
-      awsSecretAccessKey=${2}
-      shift
-      ;;
-    --awsSessionToken)
-      awsSessionToken=${2}
-      shift
-      ;;
-    --awsSecurityToken)
-      awsSecurityToken=${2}
-      shift
-      ;;
-    --debug)
-      DebugOutput=1
-      ;;
-    *)
-      echo "Unknown parameter: ${1}" >&2
-      return 1
-      ;;
-    esac
-
-    if ! shift; then
-      echo 'Missing parameter argument.' >&2
-      return 1
-    fi
-  done
-
-  if [[ -z ${awsAccessKeyId} || \
-        -z ${awsSecretAccessKey} || \
-        -z ${awsSessionToken} || \
-        -z ${awsSecurityToken} ]] \
-    ; then
-    echo "${localFunctionName}: one or more required variables are undefined"
-    return 1
-  fi
-
-awsCredentialsConfig=$(cat <<EOF
-[default]
-aws_access_key_id = ${awsAccessKeyId}
-aws_secret_access_key = ${awsSecretAccessKey}
-aws_session_token =  ${awsSessionToken}
-aws_security_token = ${awsSecurityToken}
-EOF
-)
-
-  echo "${awsCredentialsConfig}"
+export interface JobListing {
+  position: string;
+  company: string;
+  location: string;
+  date: string;
+  salary: string;
+  jobUrl: string;
 }
 
-
-renderGimmeAwsCredsConfig() {
-    # OKTA_CONFIG="~/.okta_aws_login_config"
-    # defaultGimmeCredsConfigPath="~/.okta_aws_login_config"
-
-  local localFunctionName debugOutput oktaOrgUrl configFilePath appUrl emailAddress preferredMfaType awsDefaultDuration rememberDevice writeAwsCreds gimmeCredsServer awsGimmeCredsConfig
-
-  unset ${localFunctionName} ${debugOutput} localFunctionName debugOutput oktaOrgUrl configFilePath appUrl emailAddress preferredMfaType awsDefaultDuration rememberDevice writeAwsCredsgimmeCredsServer awsGimmeCredsConfig
-
-  localFunctionName="${FUNCNAME[0]}"
-  debugOutput=1
-
-  while [[ ${1} ]]; do
-    case "${1}" in
-    --oktaOrgUrl)
-      oktaOrgUrl=${2}
-      shift
-      ;;
-    --emailAddress)
-      emailAddress=${2}
-      shift
-      ;;
-    --appUrl)
-      appUrl=${2}
-      shift
-      ;;
-    --preferredMfaType)
-      preferredMfaType=${2}
-      shift
-      ;;
-    --awsDefaultDuration)
-      roleArn=${2}
-      shift
-      ;;
-    --rememberDevice)
-      rememberDevice=${2}
-      shift
-      ;;
-    --resolveAwsAlias)
-      resolveAwsAlias=${2}
-      shift
-      ;;
-    --writeAwsCreds)
-      writeAwsCreds=${2}
-      shift
-      ;;
-    --gimmeCredsServer)
-      gimmeCredsServer=${2}
-      shift
-        ;;
-    --debug)
-      DebugOutput=1
-      ;;
-    *)
-      echo "Unknown parameter: ${1}" >&2
-      return 1
-      ;;
-    esac
-
-    if ! shift; then
-      echo 'Missing parameter argument.' >&2
-      return 1
-    fi
-  done
-
-  if [[ -z ${emailAddress} ]] \
-    ; then
-    echo "${localFunctionName}: one or more required variables are undefined"
-    return 1
-  fi
-
-  oktaOrgUrl="${oktaOrgUrl-"https://umay.okta.com"}"
-  appUrl="${appUrl-"https://umay.okta.com/home/amazon_aws/0oabfo0ubGtiUjzwz356/272"}"
-  preferredMfaType="${preferredMfaType-"token:software:totp"}"
-  awsDefaultDuration="${awsDefaultDuration-"3600"}"
-  rememberDevice="${rememberDevice-"True"}"
-  resolveAwsAlias="${resolveAwsAlias-"True"}"
-  writeAwsCreds="${writeAwsCreds-"True"}"
-  gimmeCredsServer="${gimmeCredsServer-"appurl"}"
-
-awsGimmeCredsConfig=$(cat <<EOF
-[DEFAULT]
-okta_org_url = ${oktaOrgUrl}
-okta_auth_server =
-client_id =
-gimme_creds_server = ${gimmeCredsServer}
-aws_appname =
-aws_rolename =
-write_aws_creds = "${writeAwsCreds}"
-cred_profile = default
-okta_username = ${emailAddress}
-app_url = ${appUrl}
-resolve_aws_alias = ${resolveAwsAlias}
-preferred_mfa_type = ${preferredMfaType}
-remember_device = ${rememberDevice}
-aws_default_duration = ${awsDefaultDuration}
-device_token =
-output_format = json
-EOF
-)
-
-  echo "${awsGimmeCredsConfig}"
+export interface QueryParams {
+  keyword?: string;
+  location?: string;
 }
 
-# - - - - - - - - - - - - - - - - - AWS rds-combined-ca-bundle PEM - - - - - - - - - - - - - - - #
-awsRdsCaBundle() {
+// ./index.ts
 
-    # defaultAwsRdsCaBundlePath="~/rds-combined-ca-bundle.pem
+import express from 'express';
+import { Sequelize } from 'sequelize';
+import * as dotenv from 'dotenv';
+import { createSearch, getAllSearches, updateSearch, deleteSearch } from './controllers/searchController';
+import { startMonitoringAllSearches } from './services/SearchManager';
 
-  debugOutput=0
+dotenv.config();
 
-  if [ ! -f ${defaultAwsRdsCaBundleFullPath} ] \
-    ; then
-        echo "${defaultAwsRdsCaBundleFullPath} does not exist and downloading from AWS S3."
-        curl -o ${defaultAwsRdsCaBundleFullPath} https://s3.amazonaws.com/rds-downloads/rds-combined-ca-bundle.pem
-      else
-        echo "File -> ${defaultAwsRdsCaBundleFullPath} exists and continue generating dynamic RDS credentials"
-  fi
-  echo "${awsRdsCaBundle}"
+const app = express();
+const port = process.env.PORT || 3000;
+
+// Middleware
+app.use(express.json());
+
+// Routes
+app.post('/search', createSearch);
+app.get('/search', getAllSearches);
+app.put('/search/:id', updateSearch);
+app.delete('/search/:id', deleteSearch);
+
+// Start the server
+app.listen(port, async () => {
+  console.log(`Server running on port ${port}`);
+  await startMonitoringAllSearches();
+});
+
+// ./config.ts
+
+import dotenv from 'dotenv';
+dotenv.config();
+
+export const dbConfig = {
+  username: process.env.DB_USERNAME || 'postgres',
+  password: process.env.DB_PASSWORD || '',
+  database: process.env.DB_NAME || 'job_service',
+  host: process.env.DB_HOST || 'localhost',
+  dialect: 'postgres',
+};
+
+// ./controllers/SearchController.ts
+
+// ./src/controllers/searchController.ts
+
+import { Request, Response } from 'express';
+import SearchDefinition from '../models/SearchDefinition';
+import { scheduleJob } from '../services/SearchManager';
+
+export const createSearch = async (req: Request, res: Response) => {
+  console.log('Received request to create search:', req.body); // Log request body
+
+  try {
+    const { keyword, location, refreshInterval } = req.body;
+    const newSearch = await SearchDefinition.create({ keyword, location, refreshInterval });
+    await scheduleJob(newSearch); // Schedule job for the new search
+    res.status(201).json({ message: 'Search created', data: newSearch });
+  } catch (error: any) {
+    console.error('Error creating search:', error); // Log the error
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const getAllSearches = async (req: Request, res: Response) => {
+  try {
+    const searches = await SearchDefinition.findAll();
+    res.status(200).json(searches);
+  } catch (error: any) {
+    console.error('Error fetching searches:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const updateSearch = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { keyword, location, refreshInterval } = req.body;
+    const search = await SearchDefinition.findByPk(id);
+
+    if (!search) {
+      return res.status(404).json({ error: 'Search not found' });
+    }
+
+    search.keyword = keyword || search.keyword;
+    search.location = location || search.location;
+    search.refreshInterval = refreshInterval || search.refreshInterval;
+    await search.save();
+    await scheduleJob(search); // Reschedule job with updated details
+    res.status(200).json(search);
+  } catch (error: any) {
+    console.error('Error updating search:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const deleteSearch = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const search = await SearchDefinition.findByPk(id);
+
+    if (!search) {
+      return res.status(404).json({ error: 'Search not found' });
+    }
+
+    await search.destroy();
+    res.status(200).json({ message: 'Search deleted' });
+  } catch (error: any) {
+    console.error('Error deleting search:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// ./server.ts
+
+import express from 'express';
+import bodyParser from 'body-parser';
+import searchRoutes from './routes/SearchRoutes';
+import sequelize from './db';
+import SearchDefinition from './models/SearchDefinition';
+import SearchResult from './models/SearchResult';
+import { startMonitoringAllSearches } from './services/SearchManager';
+
+
+sequelize.sync();
+
+const app = express();
+const port = process.env.PORT || 3000;
+
+app.use(bodyParser.json());
+
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.path}`);
+  next();
+});
+
+app.use('/api', searchRoutes);
+
+app.listen(port, async () => {
+  console.log(`Server is running on port ${port}`);
+  try {
+    await sequelize.authenticate();
+    await SearchDefinition.sync();
+    await SearchResult.sync();
+    await startMonitoringAllSearches();
+    console.log('Database connected and models synchronized');
+  } catch (error) {
+    console.error('Error connecting to the database:', error);
+  }
+});
+
+// ./db.ts
+
+// src/db.ts
+
+import { Sequelize } from 'sequelize';
+import { dbConfig } from './config';
+
+const sequelize = new Sequelize(dbConfig.database, dbConfig.username, dbConfig.password, {
+  host: dbConfig.host,
+  dialect: 'postgres',
+});
+
+export default sequelize;
+
+// ./routes/SearchRoutes.ts
+
+// src/routes/searchRoutes.ts
+
+import { Router } from 'express';
+import { getAllSearches, createSearch, updateSearch, deleteSearch } from '../controllers/SearchController';
+
+const router = Router();
+
+router.get('/searches', getAllSearches);
+router.post('/searches', createSearch);
+router.put('/searches/:id', updateSearch);
+router.delete('/searches/:id', deleteSearch);
+
+export default router;
+
+// ./services/SearchManager.ts
+
+// src/services/SearchManager.ts
+
+import nodeSchedule from 'node-schedule';
+import SearchDefinition from '../models/SearchDefinition';
+import SearchResult from '../models/SearchResult';
+import fetchJobListings from './LinkedInService';
+
+
+
+const jobs: { [key: number]: nodeSchedule.Job } = {};
+
+export const scheduleJob = async (search: SearchDefinition) => {
+  if (jobs[search.id]) {
+    jobs[search.id].cancel();
+  }
+
+  const job = nodeSchedule.scheduleJob(`*/${search.refreshInterval} * * * *`, async () => {
+    const jobListings = await fetchJobListings({
+      keyword: search.keyword,
+      location: search.location,
+    });
+
+    // Save job listings to the database
+    for (const listing of jobListings) {
+      await SearchResult.create({
+        searchId: search.id,
+        position: listing.position,
+        company: listing.company,
+        location: listing.location,
+        date: listing.date,
+        salary: listing.salary,
+        jobUrl: listing.jobUrl,
+      });
+    }
+  });
+
+  jobs[search.id] = job;
+};
+
+export const startMonitoringAllSearches = async () => {
+  const searches = await SearchDefinition.findAll();
+  searches.forEach(scheduleJob);
+};
+
+export const stopJob = (searchId: number) => {
+  if (jobs[searchId]) {
+    jobs[searchId].cancel();
+    delete jobs[searchId];
+  }
+};
+
+// ./services/LinkedInService.ts
+
+// src/services/LinkedInService.ts
+
+import { RestliClient } from 'linkedin-api-client';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const accessToken = process.env.ACCESS_TOKEN || process.env.LINKEDIN_ACCESS_TOKEN;
+
+if (!accessToken) {
+  throw new Error('Access token is not defined. Please check your environment variables.');
 }
 
-# - - - - - - - - - - - - - - - - - AWS MySQl RDS Connection - - - - - - - - - - - - - - - - - - - #
-MysqlRDSLogin() {
+const restliClient = new RestliClient();
 
-    # defaultAwsCredentialsConfig="~/.aws/credentials"
+const fetchJobListings = async (queryObject: { keyword: string; location: string }) => {
+  try {
+    const response = await restliClient.get({
+      resourcePath: `jobSearch?q=jobs&keywords=${encodeURIComponent(queryObject.keyword)}&location=${encodeURIComponent(queryObject.location)}`,
+      accessToken: accessToken as string,
+    });
+    return response.data.elements;
+  } catch (error) {
+    console.error('Error fetching job listings:', error);
+    return [];
+  }
+};
 
-  local debugOutput localFunctionName rdsMysqlHostEndpoint rdsMysqlUsername rdsMysqlPort rdsMysqlRegion rdsMysqlTempPassword
+export default fetchJobListings;
 
-  unset debugOutput localFunctionName rdsMysqlHostEndpoint rdsMysqlUsername rdsMysqlPort rdsMysqlRegion rdsMysqlTempPassword
+// ./utils/logger.ts
 
-  localFunctionName="${FUNCNAME[0]}"
-  debugOutput=0
+import winston from 'winston';
 
-  while [[ ${1} ]]; do
-    case "${1}" in
-    --rdsMysqlHostEndpoint)
-      rdsMysqlHostEndpoint=${2}
-      shift
-      ;;
-    --rdsMysqlUsername)
-      rdsMysqlUsername=${2}
-      shift
-      ;;
-    --rdsMysqlPort)
-      rdsMysqlPort=${2}
-      shift
-      ;;
-    --rdsMysqlRegion)
-      rdsMysqlRegion=${2}
-      shift
-      ;;
-    --rdsMysqlTempPassword)
-      rdsMysqlTempPassword=${2}
-      shift
-      ;;
-    --debug)
-      DebugOutput=1
-      ;;
-    *)
-      echo "Unknown parameter: ${1}" >&2
-      return 1
-      ;;
-    esac
-
-    if ! shift; then
-      echo 'Missing parameter argument.' >&2
-      return 1
-    fi
-  done
-
-  if [[ -z ${rdsMysqlHostEndpoint} || \
-        -z ${rdsMysqlUsername} || \
-        -z ${rdsMysqlPort} || \
-        -z ${rdsMysqlRegion} || \
-        -z ${rdsMysqlTempPassword} ]] \
-    ; then
-    echo "${localFunctionName}: one or more required variables are undefined"
-    return 1
-  fi
-
+export function configureLogger() {
+  return winston.createLogger({
+    level: 'info',
+    format: winston.format.json(),
+    transports: [
+      new winston.transports.Console(),
+      new winston.transports.File({ filename: process.env.LOG_FILE_PATH }),
+    ],
+  });
 }
 
-verifyHomebrew() {
-  which -s brew
-  if [[ $? != 0 ]] ; then
-      # Install Homebrew
-      ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
-  else
-      brew update
-  fi
+// ./models/SearchResult.ts
+
+import { Model, DataTypes } from 'sequelize';
+import sequelize from '../db'; // Import your Sequelize instance
+
+class SearchResult extends Model {
+  public id!: number;
+  public searchId!: number;
+  public position!: string;
+  public company!: string;
+  public location!: string;
+  public date!: string;
+  public salary!: string;
+  public jobUrl!: string;
 }
 
-backupFile() {
-  local filename
-  unset localFunctionName debugOutput file
+SearchResult.init(
+  {
+    id: {
+      type: DataTypes.INTEGER,
+      primaryKey: true,
+      autoIncrement: true,
+    },
+    searchId: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+    },
+    position: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    company: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    location: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    date: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    salary: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    jobUrl: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+  },
+  {
+    sequelize,
+    modelName: 'SearchResult',
+  }
+);
 
-  localFunctionName="${FUNCNAME[0]}"
-  debugOutput=0
+export default SearchResult;
 
-  while [[ ${1} ]]; do
-      case "${1}" in
-      --filename)
-        filename=${2}
-        shift
-        ;;
-      --suffix)
-        suffix=${2}
-        shift
-        ;;
-      --debug)
-        DebugOutput=1
-        ;;
-      *)
-        echo "Unknown parameter: ${1}" >&2
-        return 1
-        ;;
-      esac
+// ./models/SearchDefinition.ts
 
-    if ! shift; then
-      echo 'Missing parameter argument.' >&2
-      return 1
-    fi
-  done
+import { Model, DataTypes } from 'sequelize';
+import sequelize from '../db'; // Import your Sequelize instance
 
-  if [[ -z ${filename} ]] \
-    ; then
-    echo "${localFunctionName}: one or more required variables are undefined"
-    return 1
-  fi
-
-  suffix="${suffix-".$(date +%y%m%d_%H%M%S)"}"
-
-  cmd="cp ${filename} ${filename}${suffix}"
-  #cp ${filename} ${filename}${suffix}
-  [[ debugOutput -gt 0 ]] && echo "cmd: ${cmd}"
-
-  eval "${cmd}"
-
+class SearchDefinition extends Model {
+  public id!: number;
+  public keyword!: string;
+  public location!: string;
+  public refreshInterval!: number;
 }
 
+SearchDefinition.init(
+  {
+    id: {
+      type: DataTypes.INTEGER,
+      primaryKey: true,
+      autoIncrement: true,
+    },
+    keyword: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    location: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    refreshInterval: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+    },
+  },
+  {
+    sequelize,
+    modelName: 'SearchDefinition',
+  }
+);
 
-checkDependencies() {
-  requireBashFour
-  # for tap in "${tapRequirements[@]}"
-  #   do
-  #     requireTap \
-  #       --tap ${tap} || \
-  #       #--debug || \
-  #         exit 1
-  #   done
+export default SearchDefinition;
 
-  for requirement in "${binaryRequirements[@]}"
-    do
-      requires \
-        --requirement ${requirement} || \
-        #--debug || \
-          exit 1
-    done
+// ./types.ts
+
+export interface JobListing {
+  position: string;
+  company: string;
+  location: string;
+  date: string;
+  salary: string;
+  jobUrl: string;
 }
+
+export interface QueryParams {
+  keyword?: string;
+  location?: string;
+}
+
+// ./index.ts
+
+import express from 'express';
+import { Sequelize } from 'sequelize';
+import * as dotenv from 'dotenv';
+import { createSearch, getAllSearches, updateSearch, deleteSearch } from './controllers/searchController';
+import { startMonitoringAllSearches } from './services/SearchManager';
+
+dotenv.config();
+
+const app = express();
+const port = process.env.PORT || 3000;
+
+// Middleware
+app.use(express.json());
+
+// Routes
+app.post('/search', createSearch);
+app.get('/search', getAllSearches);
+app.put('/search/:id', updateSearch);
+app.delete('/search/:id', deleteSearch);
+
+// Start the server
+app.listen(port, async () => {
+  console.log(`Server running on port ${port}`);
+  await startMonitoringAllSearches();
+});
+
+// ./config.ts
+
+import dotenv from 'dotenv';
+dotenv.config();
+
+export const dbConfig = {
+  username: process.env.DB_USERNAME || 'postgres',
+  password: process.env.DB_PASSWORD || '',
+  database: process.env.DB_NAME || 'job_service',
+  host: process.env.DB_HOST || 'localhost',
+  dialect: 'postgres',
+};
+
+// ./controllers/SearchController.ts
+
+// ./src/controllers/searchController.ts
+
+import { Request, Response } from 'express';
+import SearchDefinition from '../models/SearchDefinition';
+import { scheduleJob } from '../services/SearchManager';
+
+export const createSearch = async (req: Request, res: Response) => {
+  console.log('Received request to create search:', req.body); // Log request body
+
+  try {
+    const { keyword, location, refreshInterval } = req.body;
+    const newSearch = await SearchDefinition.create({ keyword, location, refreshInterval });
+    await scheduleJob(newSearch); // Schedule job for the new search
+    res.status(201).json({ message: 'Search created', data: newSearch });
+  } catch (error: any) {
+    console.error('Error creating search:', error); // Log the error
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const getAllSearches = async (req: Request, res: Response) => {
+  try {
+    const searches = await SearchDefinition.findAll();
+    res.status(200).json(searches);
+  } catch (error: any) {
+    console.error('Error fetching searches:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const updateSearch = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { keyword, location, refreshInterval } = req.body;
+    const search = await SearchDefinition.findByPk(id);
+
+    if (!search) {
+      return res.status(404).json({ error: 'Search not found' });
+    }
+
+    search.keyword = keyword || search.keyword;
+    search.location = location || search.location;
+    search.refreshInterval = refreshInterval || search.refreshInterval;
+    await search.save();
+    await scheduleJob(search); // Reschedule job with updated details
+    res.status(200).json(search);
+  } catch (error: any) {
+    console.error('Error updating search:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const deleteSearch = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const search = await SearchDefinition.findByPk(id);
+
+    if (!search) {
+      return res.status(404).json({ error: 'Search not found' });
+    }
+
+    await search.destroy();
+    res.status(200).json({ message: 'Search deleted' });
+  } catch (error: any) {
+    console.error('Error deleting search:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// ./server.ts
+
+import express from 'express';
+import bodyParser from 'body-parser';
+import searchRoutes from './routes/SearchRoutes';
+import sequelize from './db';
+import SearchDefinition from './models/SearchDefinition';
+import SearchResult from './models/SearchResult';
+import { startMonitoringAllSearches } from './services/SearchManager';
+
+
+sequelize.sync();
+
+const app = express();
+const port = process.env.PORT || 3000;
+
+app.use(bodyParser.json());
+
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.path}`);
+  next();
+});
+
+app.use('/api', searchRoutes);
+
+app.listen(port, async () => {
+  console.log(`Server is running on port ${port}`);
+  try {
+    await sequelize.authenticate();
+    await SearchDefinition.sync();
+    await SearchResult.sync();
+    await startMonitoringAllSearches();
+    console.log('Database connected and models synchronized');
+  } catch (error) {
+    console.error('Error connecting to the database:', error);
+  }
+});
+
+// ./db.ts
+
+// src/db.ts
+
+import { Sequelize } from 'sequelize';
+import { dbConfig } from './config';
+
+const sequelize = new Sequelize(dbConfig.database, dbConfig.username, dbConfig.password, {
+  host: dbConfig.host,
+  dialect: 'postgres',
+});
+
+export default sequelize;
+
+// ./routes/SearchRoutes.ts
+
+// src/routes/searchRoutes.ts
+
+import { Router } from 'express';
+import { getAllSearches, createSearch, updateSearch, deleteSearch } from '../controllers/SearchController';
+
+const router = Router();
+
+router.get('/searches', getAllSearches);
+router.post('/searches', createSearch);
+router.put('/searches/:id', updateSearch);
+router.delete('/searches/:id', deleteSearch);
+
+export default router;
+
+// ./services/SearchManager.ts
+
+// src/services/SearchManager.ts
+
+import nodeSchedule from 'node-schedule';
+import SearchDefinition from '../models/SearchDefinition';
+import SearchResult from '../models/SearchResult';
+import fetchJobListings from './LinkedInService';
+
+
+
+const jobs: { [key: number]: nodeSchedule.Job } = {};
+
+export const scheduleJob = async (search: SearchDefinition) => {
+  if (jobs[search.id]) {
+    jobs[search.id].cancel();
+  }
+
+  const job = nodeSchedule.scheduleJob(`*/${search.refreshInterval} * * * *`, async () => {
+    const jobListings = await fetchJobListings({
+      keyword: search.keyword,
+      location: search.location,
+    });
+
+    // Save job listings to the database
+    for (const listing of jobListings) {
+      await SearchResult.create({
+        searchId: search.id,
+        position: listing.position,
+        company: listing.company,
+        location: listing.location,
+        date: listing.date,
+        salary: listing.salary,
+        jobUrl: listing.jobUrl,
+      });
+    }
+  });
+
+  jobs[search.id] = job;
+};
+
+export const startMonitoringAllSearches = async () => {
+  const searches = await SearchDefinition.findAll();
+  searches.forEach(scheduleJob);
+};
+
+export const stopJob = (searchId: number) => {
+  if (jobs[searchId]) {
+    jobs[searchId].cancel();
+    delete jobs[searchId];
+  }
+};
+
+// ./services/LinkedInService.ts
+
+// src/services/LinkedInService.ts
+
+import { RestliClient } from 'linkedin-api-client';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const accessToken = process.env.ACCESS_TOKEN || process.env.LINKEDIN_ACCESS_TOKEN;
+
+if (!accessToken) {
+  throw new Error('Access token is not defined. Please check your environment variables.');
+}
+
+const restliClient = new RestliClient();
+
+const fetchJobListings = async (queryObject: { keyword: string; location: string }) => {
+  try {
+    const response = await restliClient.get({
+      resourcePath: `jobSearch?q=jobs&keywords=${encodeURIComponent(queryObject.keyword)}&location=${encodeURIComponent(queryObject.location)}`,
+      accessToken: accessToken as string,
+    });
+    return response.data.elements;
+  } catch (error) {
+    console.error('Error fetching job listings:', error);
+    return [];
+  }
+};
+
+export default fetchJobListings;
 
