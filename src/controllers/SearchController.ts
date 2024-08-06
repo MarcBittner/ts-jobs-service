@@ -1,8 +1,7 @@
-// ./controllers/SearchController.ts
 
 import { Request, Response } from 'express';
 import SearchDefinition from '../models/SearchDefinition';
-import { scheduleJob } from '../services/SearchManager';
+import { scheduleJobForSearch } from '../services/SearchManager'; // Use the correct function name
 import logger from '../utils/logger';
 
 export const createSearch = async (req: Request, res: Response) => {
@@ -11,7 +10,7 @@ export const createSearch = async (req: Request, res: Response) => {
   try {
     const { keyword, location, refreshInterval } = req.body;
     const newSearch = await SearchDefinition.create({ keyword, location, refreshInterval });
-    await scheduleJob(newSearch);
+    await scheduleJobForSearch(newSearch); // Use the correct function
     res.status(201).json({ message: 'Search created', data: newSearch });
   } catch (error: any) {
     logger.error('Error creating search', { error: error.message });
@@ -44,7 +43,7 @@ export const updateSearch = async (req: Request, res: Response) => {
     search.location = location || search.location;
     search.refreshInterval = refreshInterval || search.refreshInterval;
     await search.save();
-    await scheduleJob(search);
+    await scheduleJobForSearch(search);
     res.status(200).json(search);
   } catch (error: any) {
     logger.error('Error updating search', { error: error.message });

@@ -1,4 +1,3 @@
-// testDatabaseConnection.ts
 
 import sequelize from './db';
 import SearchDefinition from './models/SearchDefinition';

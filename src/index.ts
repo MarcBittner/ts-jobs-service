@@ -1,4 +1,3 @@
-// index.ts
 
 import express from 'express';
 import * as dotenv from 'dotenv';
@@ -6,7 +5,6 @@ import bodyParser from 'body-parser';
 import searchRoutes from './routes/SearchRoutes';
 import sequelize from './db';
 import SearchDefinition from './models/SearchDefinition';
-import SearchResult from './models/SearchResult';
 import { startMonitoringAllSearches } from './services/SearchManager';
 import logger from './utils/logger';
 

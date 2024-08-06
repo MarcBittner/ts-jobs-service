@@ -35,9 +35,10 @@ importFiles=(
               "csv-writer"
               "ffs"
               "linkedin-api-client"
+              "puppeteer"
               )
 
-# Optionally set -x with a friendly variable
+# Optionally set -x with a friendly variabqle
 
 [[ bash_debug -gt 0 ]] && set -x
 
@@ -46,7 +47,7 @@ _bashlog info "$(rm -f ./dist/*.js 2>&1 | tee /dev/tty)"
 _bashlog info "$(rm -f ./src/*.js 2>&1 | tee /dev/tty)"
 
 # Install dependencies
-_bashlog info "$(npm install 2>&1 | tee /dev/tty)"
+_bashlog info "$(npm install ${importModules[@]} 2>&1 | tee /dev/tty)"
 
 # Compile TypeScript files
 _bashlog info "$(npx tsc --build --listEmittedFiles 2>&1 | tee /dev/tty)"
