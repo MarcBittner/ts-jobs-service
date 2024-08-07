@@ -1,0 +1,654 @@
+frontend/
+
+    .
+    ├── README.md
+    ├── build
+    │   ├── asset-manifest.json
+    │   ├── favicon.ico
+    │   ├── index.html
+    │   ├── logo192.png
+    │   ├── logo512.png
+    │   ├── manifest.json
+    │   ├── robots.txt
+    │   └── static
+    │       ├── css
+    │       │   ├── main.836b51fb.css
+    │       │   └── main.836b51fb.css.map
+    │       └── js
+    │           ├── main.5993b925.js
+    │           ├── main.5993b925.js.LICENSE.txt
+    │           └── main.5993b925.js.map
+    ├── package-lock.json
+    ├── package.json
+    ├── public
+    │   ├── favicon.ico
+    │   ├── index.html
+    │   ├── logo192.png
+    │   ├── logo512.png
+    │   ├── manifest.json
+    │   └── robots.txt
+    ├── src
+    │   ├── App.css
+    │   ├── App.test.tsx
+    │   ├── App.tsx
+    │   ├── api.ts
+    │   ├── components
+    │   │   ├── Logs.css
+    │   │   ├── Logs.tsx
+    │   │   ├── SearchEdit.tsx
+    │   │   ├── SearchList.tsx
+    │   │   ├── SearchResults.css
+    │   │   └── SearchResults.tsx
+    │   ├── index.css
+    │   ├── index.tsx
+    │   ├── logo.svg
+    │   ├── react-app-env.d.ts
+    │   ├── reportWebVitals.ts
+    │   └── setupTests.ts
+    └── tsconfig.json
+    
+    8 directories, 38 files
+
+// ./src/index.tsx
+import React from 'react';
+import ReactDOM from 'react-dom';
+import './index.css';
+import App from './App';
+
+ReactDOM.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+  document.getElementById('root')
+);
+
+// ./src/App.tsx
+import React, { useEffect, useState } from 'react';
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import SearchList from './components/SearchList';
+import SearchEdit from './components/SearchEdit';
+import SearchResults from './components/SearchResults';
+import Logs from './components/Logs';
+import './App.css';
+
+const appName = process.env.REACT_APP_NAME || 'MyApp';
+const frontendVersion = process.env.REACT_APP_VERSION || '1.0';
+
+const App: React.FC = () => {
+  const [backendVersion, setBackendVersion] = useState<string>('');
+
+  // Fetch backend version
+  useEffect(() => {
+    async function fetchBackendVersion() {
+      try {
+        const response = await fetch('/api/version');
+        const data = await response.json();
+        setBackendVersion(data.version || 'Unknown');
+      } catch (error) {
+        console.error('Error fetching backend version:', error);
+      }
+    }
+
+    fetchBackendVersion();
+  }, []);
+
+  return (
+    <Router>
+      <div className="app-container">
+        <header>
+          <h1>{appName}</h1>
+          <div className="versions">
+            <small>Frontend v{frontendVersion}</small>
+            <small>Backend v{backendVersion}</small>
+          </div>
+          <nav>
+            <ul>
+              <li><Link to="/">Searches</Link></li>
+              <li><Link to="/config">Config</Link></li>
+              <li><Link to="/logs">Logs</Link></li>
+            </ul>
+          </nav>
+        </header>
+        <main>
+          <Routes>
+            <Route path="/" element={<SearchList />} />
+            <Route path="/new-search" element={<SearchEdit />} />
+            <Route path="/edit-search/:id" element={<SearchEdit />} />
+            <Route path="/searches/:id/results" element={<SearchResults />} />
+            <Route path="/logs" element={<Logs />} />
+            <Route path="/config" element={<div>Config section is not implemented yet.</div>} />
+          </Routes>
+        </main>
+      </div>
+    </Router>
+  );
+};
+
+export default App;
+
+// ./src/App.test.tsx
+import React from 'react';
+import { render, screen } from '@testing-library/react';
+import App from './App';
+
+test('renders learn react link', () => {
+  render(<App />);
+  const linkElement = screen.getByText(/learn react/i);
+  expect(linkElement).toBeInTheDocument();
+});
+
+// ./src/components/Logs.tsx
+import React, { useState, useEffect } from 'react';
+import './Logs.css';
+
+const Logs: React.FC = () => {
+  const [logType, setLogType] = useState<'application' | 'build'>('application');
+  const [logs, setLogs] = useState<string>('');
+
+  useEffect(() => {
+    async function fetchLogs() {
+      console.log(`Fetching ${logType} log`);
+      try {
+        const response = await fetch(`/logs/${logType}.log?cacheBust=${Date.now()}`);
+        console.log(`Request URL: ${response.url}`);
+        console.log(`Response status: ${response.status}`);
+        console.log(`Response headers:`, response.headers);
+        const contentType = response.headers.get('content-type');
+        console.log(`Content-Type: ${contentType}`);
+        if (response.ok && contentType && contentType.includes('text/plain')) {
+          const text = await response.text();
+          console.log(`Log content: ${text}`);
+          setLogs(text);
+        } else {
+          console.log(`Failed to fetch log: ${response.statusText}`);
+          setLogs('Log file not found.');
+        }
+      } catch (error) {
+        console.error("Error fetching logs:", error);
+        setLogs('Error fetching logs.');
+      }
+    }
+    fetchLogs();
+  }, [logType]);
+
+  return (
+    <div>
+      <h2>Logs</h2>
+      <div>
+        <button onClick={() => setLogType('application')}>Application Log</button>
+        <button onClick={() => setLogType('build')}>Build Log</button>
+      </div>
+      <pre className="log-content">{logs}</pre>
+    </div>
+  );
+};
+
+export default Logs;
+
+// ./src/components/SearchList.tsx
+import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { getSearches, deleteSearch } from '../api';
+
+const SearchList: React.FC = () => {
+  const [searches, setSearches] = useState<any[]>([]);
+
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const response = await getSearches();
+        setSearches(response.data);
+      } catch (error) {
+        console.error("Error fetching searches:", error);
+      }
+    }
+    fetchData();
+  }, []);
+
+  const handleDelete = async (id: number) => {
+    try {
+      await deleteSearch(id);
+      setSearches(searches.filter(search => search.id !== id));
+    } catch (error) {
+      console.error("Error deleting search:", error);
+    }
+  };
+
+  return (
+    <div>
+      <h2>Configured Searches</h2>
+      <ul>
+        {searches.map(search => (
+          <li key={search.id}>
+            <Link to={`/searches/${search.id}/results`}>{search.keyword} - {search.location}</Link>
+            <button onClick={() => handleDelete(search.id)}>Delete</button>
+            <Link to={`/edit-search/${search.id}`}>Edit</Link>
+          </li>
+        ))}
+      </ul>
+      <Link to="/new-search">Create New Search</Link>
+    </div>
+  );
+};
+
+export default SearchList;
+
+// ./src/components/SearchResults.tsx
+import React, { useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom';
+import { getSearchResults } from '../api';
+import './SearchResults.css';
+
+const SearchResults: React.FC = () => {
+  const { id } = useParams<{ id: string }>();
+  const [results, setResults] = useState<any[]>([]);
+  const [keyword, setKeyword] = useState('');
+  const [sortField, setSortField] = useState('');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const response = await getSearchResults(Number(id));
+        setResults(response.data);
+      } catch (error) {
+        console.error("Error fetching search results:", error);
+      }
+    }
+    fetchData();
+  }, [id]);
+
+  const handleSort = (field: string) => {
+    const order = sortField === field && sortOrder === 'asc' ? 'desc' : 'asc';
+    setSortField(field);
+    setSortOrder(order);
+    setResults([...results].sort((a, b) => {
+      if (a[field] < b[field]) return order === 'asc' ? -1 : 1;
+      if (a[field] > b[field]) return order === 'asc' ? 1 : -1;
+      return 0;
+    }));
+  };
+
+  const filteredResults = results.filter(result =>
+    result.position.toLowerCase().includes(keyword.toLowerCase()) ||
+    result.company.toLowerCase().includes(keyword.toLowerCase())
+  );
+
+  return (
+    <div>
+      <h2>Search Results</h2>
+      <input
+        type="text"
+        placeholder="Filter by keyword"
+        value={keyword}
+        onChange={(e) => setKeyword(e.target.value)}
+      />
+      {filteredResults.length > 0 ? (
+        <table>
+          <thead>
+            <tr>
+              <th onClick={() => handleSort('position')}>Position</th>
+              <th onClick={() => handleSort('company')}>Company</th>
+              <th onClick={() => handleSort('location')}>Location</th>
+              <th onClick={() => handleSort('date')}>Date</th>
+              <th onClick={() => handleSort('salary')}>Salary</th>
+              <th>Job URL</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredResults.map(result => (
+              <tr key={result.id}>
+                <td>{result.position}</td>
+                <td>{result.company}</td>
+                <td>{result.location}</td>
+                <td>{result.date}</td>
+                <td>{result.salary}</td>
+                <td><a href={result.jobUrl} target="_blank" rel="noopener noreferrer">Link</a></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <p>No results yet</p>
+      )}
+    </div>
+  );
+};
+
+export default SearchResults;
+
+// ./src/components/SearchEdit.tsx
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { createSearch, updateSearch, getSearches } from '../api';
+
+const SearchEdit: React.FC = () => {
+  const { id } = useParams<{ id: string }>();
+  const [keyword, setKeyword] = useState('');
+  const [location, setLocation] = useState('');
+  const [refreshInterval, setRefreshInterval] = useState(0);
+  const navigate = useNavigate(); // Updated variable name
+
+  useEffect(() => {
+    if (id) {
+      const fetchData = async () => {
+        try {
+          const response = await getSearches();
+          const search = response.data.find((search: any) => search.id === Number(id));
+          if (search) {
+            setKeyword(search.keyword);
+            setLocation(search.location);
+            setRefreshInterval(search.refreshInterval);
+          }
+        } catch (error) {
+          console.error("Error fetching search:", error);
+        }
+      };
+      fetchData();
+    }
+  }, [id]);
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    try {
+      if (id) {
+        await updateSearch(Number(id), { keyword, location, refreshInterval });
+      } else {
+        await createSearch({ keyword, location, refreshInterval });
+      }
+      navigate('/'); // Use navigate function directly
+    } catch (error) {
+      console.error("Error saving search:", error);
+    }
+  };
+
+  return (
+    <div>
+      <h2>{id ? 'Edit Search' : 'Create New Search'}</h2>
+      <form onSubmit={handleSubmit}>
+        <div>
+          <label>Keyword:</label>
+          <input
+            type="text"
+            value={keyword}
+            onChange={(e) => setKeyword(e.target.value)}
+            required
+          />
+        </div>
+        <div>
+          <label>Location:</label>
+          <input
+            type="text"
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            required
+          />
+        </div>
+        <div>
+          <label>Refresh Interval (minutes):</label>
+          <input
+            type="number"
+            value={refreshInterval}
+            onChange={(e) => setRefreshInterval(Number(e.target.value))}
+            required
+          />
+        </div>
+        <button type="submit">Save</button>
+      </form>
+    </div>
+  );
+};
+
+export default SearchEdit;
+
+frontend/
+
+    .
+    ├── README.md
+    ├── build
+    │   ├── asset-manifest.json
+    │   ├── favicon.ico
+    │   ├── index.html
+    │   ├── logo192.png
+    │   ├── logo512.png
+    │   ├── manifest.json
+    │   ├── robots.txt
+    │   └── static
+    │       ├── css
+    │       │   ├── main.836b51fb.css
+    │       │   └── main.836b51fb.css.map
+    │       └── js
+    │           ├── main.5993b925.js
+    │           ├── main.5993b925.js.LICENSE.txt
+    │           └── main.5993b925.js.map
+    ├── package-lock.json
+    ├── package.json
+    ├── public
+    │   ├── favicon.ico
+    │   ├── index.html
+    │   ├── logo192.png
+    │   ├── logo512.png
+    │   ├── manifest.json
+    │   └── robots.txt
+    ├── src
+    │   ├── App.css
+    │   ├── App.test.tsx
+    │   ├── App.tsx
+    │   ├── api.ts
+    │   ├── components
+    │   │   ├── Logs.css
+    │   │   ├── Logs.tsx
+    │   │   ├── SearchEdit.tsx
+    │   │   ├── SearchList.tsx
+    │   │   ├── SearchResults.css
+    │   │   └── SearchResults.tsx
+    │   ├── index.css
+    │   ├── index.tsx
+    │   ├── logo.svg
+    │   ├── react-app-env.d.ts
+    │   ├── reportWebVitals.ts
+    │   └── setupTests.ts
+    └── tsconfig.json
+    
+    8 directories, 38 files
+
+// ./src/api.ts
+import axios from 'axios';
+
+const API_BASE_URL = 'http://localhost:4000/api'; // Use the correct backend port
+
+export const getSearches = () => axios.get(`${API_BASE_URL}/searches`);
+export const createSearch = (data: any) => axios.post(`${API_BASE_URL}/searches`, data);
+export const updateSearch = (id: number, data: any) => axios.put(`${API_BASE_URL}/searches/${id}`, data);
+export const deleteSearch = (id: number) => axios.delete(`${API_BASE_URL}/searches/${id}`);
+export const getSearchResults = (searchId: number) => axios.get(`${API_BASE_URL}/searches/${searchId}/results`);
+
+// ./src/setupTests.ts
+// jest-dom adds custom jest matchers for asserting on DOM nodes.
+// allows you to do things like:
+// expect(element).toHaveTextContent(/react/i)
+// learn more: https://github.com/testing-library/jest-dom
+import '@testing-library/jest-dom';
+
+// ./src/reportWebVitals.ts
+import { ReportHandler } from 'web-vitals';
+
+const reportWebVitals = (onPerfEntry?: ReportHandler) => {
+  if (onPerfEntry && onPerfEntry instanceof Function) {
+    import('web-vitals').then(({ getCLS, getFID, getFCP, getLCP, getTTFB }) => {
+      getCLS(onPerfEntry);
+      getFID(onPerfEntry);
+      getFCP(onPerfEntry);
+      getLCP(onPerfEntry);
+      getTTFB(onPerfEntry);
+    });
+  }
+};
+
+export default reportWebVitals;
+
+// ./src/react-app-env.d.ts
+/// <reference types="react-scripts" />
+
+frontend/
+
+    .
+    ├── README.md
+    ├── build
+    │   ├── asset-manifest.json
+    │   ├── favicon.ico
+    │   ├── index.html
+    │   ├── logo192.png
+    │   ├── logo512.png
+    │   ├── manifest.json
+    │   ├── robots.txt
+    │   └── static
+    │       ├── css
+    │       │   ├── main.836b51fb.css
+    │       │   └── main.836b51fb.css.map
+    │       └── js
+    │           ├── main.5993b925.js
+    │           ├── main.5993b925.js.LICENSE.txt
+    │           └── main.5993b925.js.map
+    ├── package-lock.json
+    ├── package.json
+    ├── public
+    │   ├── favicon.ico
+    │   ├── index.html
+    │   ├── logo192.png
+    │   ├── logo512.png
+    │   ├── manifest.json
+    │   └── robots.txt
+    ├── src
+    │   ├── App.css
+    │   ├── App.test.tsx
+    │   ├── App.tsx
+    │   ├── api.ts
+    │   ├── components
+    │   │   ├── Logs.css
+    │   │   ├── Logs.tsx
+    │   │   ├── SearchEdit.tsx
+    │   │   ├── SearchList.tsx
+    │   │   ├── SearchResults.css
+    │   │   └── SearchResults.tsx
+    │   ├── index.css
+    │   ├── index.tsx
+    │   ├── logo.svg
+    │   ├── react-app-env.d.ts
+    │   ├── reportWebVitals.ts
+    │   └── setupTests.ts
+    └── tsconfig.json
+    
+    8 directories, 38 files
+
+// ./build/static/css/main.836b51fb.css
+body{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Oxygen,Ubuntu,Cantarell,Fira Sans,Droid Sans,Helvetica Neue,sans-serif;margin:0}code{font-family:source-code-pro,Menlo,Monaco,Consolas,Courier New,monospace}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ddd;padding:8px}th{background-color:#f2f2f2;cursor:pointer}th:hover{background-color:#ddd}pre{background-color:#f2f2f2;border:1px solid #ddd;max-height:400px;overflow:auto;padding:10px}button{margin-right:10px;padding:5px 10px}.log-content{word-wrap:break-word;background-color:#f5f5f5;border:1px solid #ddd;border-radius:4px;max-height:400px;overflow-y:auto;padding:10px;white-space:pre-wrap}.app-container{font-family:Arial,sans-serif}header{background-color:#282c34;color:#fff;padding:20px}header h1{font-size:2em;margin:0}.versions{align-items:flex-start;display:flex;flex-direction:column;font-size:.8em;margin-top:5px}.versions small{margin:0}nav ul{display:flex;gap:15px;list-style:none;padding:0}nav a{color:#fff;text-decoration:none}nav a:hover{text-decoration:underline}main{padding:20px}
+/*# sourceMappingURL=main.836b51fb.css.map*/
+// ./src/App.css
+.app-container {
+  font-family: Arial, sans-serif;
+}
+
+header {
+  background-color: #282c34;
+  padding: 20px;
+  color: white;
+}
+
+header h1 {
+  margin: 0;
+  font-size: 2em;
+}
+
+.versions {
+  display: flex;
+  flex-direction: column; /* Align versions vertically */
+  align-items: flex-start; /* Align text to the left */
+  margin-top: 5px;
+  font-size: 0.8em;
+}
+
+.versions small {
+  margin: 0;
+}
+
+nav ul {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  gap: 15px;
+}
+
+nav a {
+  color: white;
+  text-decoration: none;
+}
+
+nav a:hover {
+  text-decoration: underline;
+}
+
+main {
+  padding: 20px;
+}
+
+// ./src/index.css
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+// ./src/components/Logs.css
+pre {
+  background-color: #f2f2f2;
+  padding: 10px;
+  border: 1px solid #ddd;
+  overflow: auto;
+  max-height: 400px;
+}
+
+button {
+  margin-right: 10px;
+  padding: 5px 10px;
+}
+
+.log-content {
+  white-space: pre-wrap; /* Ensures the text wraps */
+  word-wrap: break-word; /* Prevents long words from breaking the layout */
+  background-color: #f5f5f5;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+// ./src/components/SearchResults.css
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th, td {
+  border: 1px solid #ddd;
+  padding: 8px;
+}
+
+th {
+  cursor: pointer;
+  background-color: #f2f2f2;
+}
+
+th:hover {
+  background-color: #ddd;
+}
+

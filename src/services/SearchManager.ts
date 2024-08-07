@@ -1,19 +1,17 @@
-// ./services/SearchManager.ts
-
 import nodeSchedule from 'node-schedule';
 import SearchDefinition from '../models/SearchDefinition';
 import SearchResult from '../models/SearchResult';
-import fetchJobListings from './LinkedInService';
+import fetchJobListings from './LinkedInScraper';
 import logger from '../utils/logger';
 
 const jobs: { [key: number]: nodeSchedule.Job } = {};
 
-export const scheduleJob = async (search: SearchDefinition) => {
+export const scheduleJobForSearch = async (search: SearchDefinition) => {
   if (jobs[search.id]) {
     jobs[search.id].cancel();
   }
 
-  logger.info('Scheduling job', { searchId: search.id, refreshInterval: search.refreshInterval });
+  logger.info('Scheduling job for search', { searchId: search.id, refreshInterval: search.refreshInterval });
 
   const job = nodeSchedule.scheduleJob(`*/${search.refreshInterval} * * * *`, async () => {
     try {
@@ -22,21 +20,33 @@ export const scheduleJob = async (search: SearchDefinition) => {
         location: search.location,
       });
 
+      logger.info('Fetched job listings', { count: jobListings.length });
+
       for (const listing of jobListings) {
-        await SearchResult.create({
-          searchId: search.id,
-          position: listing.position,
-          company: listing.company,
-          location: listing.location,
-          date: listing.date,
-          salary: listing.salary,
-          jobUrl: listing.jobUrl,
-        });
+        try {
+          await SearchResult.create({
+            searchId: search.id,
+            position: listing.position,
+            company: listing.company,
+            location: listing.location,
+            date: listing.date,
+            salary: listing.salary, // Assuming you have a salary field in the DB schema
+            jobUrl: listing.jobUrl,
+          });
+          logger.info('Job listing saved', { listing });
+        } catch (error) {
+          logger.error('Error saving job listing', {
+            error: error instanceof Error ? error.message : String(error),
+            listing,
+          });
+        }
       }
 
-      logger.info('Job listings fetched and saved', { searchId: search.id });
+      logger.info('Job listings processed', { searchId: search.id, count: jobListings.length });
     } catch (error) {
-      logger.error('Error during job execution', { error: (error as Error).message });
+      logger.error('Error during job execution', {
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   });
 
@@ -46,10 +56,12 @@ export const scheduleJob = async (search: SearchDefinition) => {
 export const startMonitoringAllSearches = async () => {
   try {
     const searches = await SearchDefinition.findAll();
-    searches.forEach(scheduleJob);
+    searches.forEach(scheduleJobForSearch);
     logger.info('Started monitoring all searches');
   } catch (error) {
-    logger.error('Error starting monitoring of searches', { error: (error as Error).message });
+    logger.error('Error starting monitoring of searches', {
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 };
 

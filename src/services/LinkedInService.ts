@@ -1,4 +1,3 @@
-// src/services/LinkedInService.ts
 
 import { RestliClient } from 'linkedin-api-client';
 import dotenv from 'dotenv';

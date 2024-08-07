@@ -1,4 +1,3 @@
-// ./db.ts
 
 import { Sequelize } from 'sequelize';
 import { dbConfig } from './config';
