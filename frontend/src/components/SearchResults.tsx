@@ -1,10 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { getSearchResults } from '../api';
+import './SearchResults.css';
 
 const SearchResults: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const [results, setResults] = useState<any[]>([]);
+  const [keyword, setKeyword] = useState('');
+  const [sortField, setSortField] = useState('');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
   useEffect(() => {
     async function fetchData() {
@@ -18,19 +22,59 @@ const SearchResults: React.FC = () => {
     fetchData();
   }, [id]);
 
+  const handleSort = (field: string) => {
+    const order = sortField === field && sortOrder === 'asc' ? 'desc' : 'asc';
+    setSortField(field);
+    setSortOrder(order);
+    setResults([...results].sort((a, b) => {
+      if (a[field] < b[field]) return order === 'asc' ? -1 : 1;
+      if (a[field] > b[field]) return order === 'asc' ? 1 : -1;
+      return 0;
+    }));
+  };
+
+  const filteredResults = results.filter(result =>
+    result.position.toLowerCase().includes(keyword.toLowerCase()) ||
+    result.company.toLowerCase().includes(keyword.toLowerCase())
+  );
+
   return (
     <div>
       <h2>Search Results</h2>
-      <ul>
-        {results.map(result => (
-          <li key={result.id}>
-            <a href={result.jobUrl} target="_blank" rel="noopener noreferrer">
-              {result.position} at {result.company} - {result.location}
-            </a>
-            <p>{result.date}</p>
-          </li>
-        ))}
-      </ul>
+      <input
+        type="text"
+        placeholder="Filter by keyword"
+        value={keyword}
+        onChange={(e) => setKeyword(e.target.value)}
+      />
+      {filteredResults.length > 0 ? (
+        <table>
+          <thead>
+            <tr>
+              <th onClick={() => handleSort('position')}>Position</th>
+              <th onClick={() => handleSort('company')}>Company</th>
+              <th onClick={() => handleSort('location')}>Location</th>
+              <th onClick={() => handleSort('date')}>Date</th>
+              <th onClick={() => handleSort('salary')}>Salary</th>
+              <th>Job URL</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredResults.map(result => (
+              <tr key={result.id}>
+                <td>{result.position}</td>
+                <td>{result.company}</td>
+                <td>{result.location}</td>
+                <td>{result.date}</td>
+                <td>{result.salary}</td>
+                <td><a href={result.jobUrl} target="_blank" rel="noopener noreferrer">Link</a></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <p>No results yet</p>
+      )}
     </div>
   );
 };
