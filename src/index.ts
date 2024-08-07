@@ -1,7 +1,7 @@
-
 import express from 'express';
 import * as dotenv from 'dotenv';
 import bodyParser from 'body-parser';
+import cors from 'cors';  // Importing CORS
 import searchRoutes from './routes/SearchRoutes';
 import sequelize from './db';
 import SearchDefinition from './models/SearchDefinition';
@@ -17,7 +17,10 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 4000;
+
+// Enable CORS for all routes
+app.use(cors());
 
 app.use(bodyParser.json());
 

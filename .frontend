@@ -1,0 +1,534 @@
+src/
+
+    .
+    ├── App.css
+    ├── App.test.tsx
+    ├── App.tsx
+    ├── api.ts
+    ├── components
+    │   ├── SearchEdit.tsx
+    │   ├── SearchList.tsx
+    │   └── SearchResults.tsx
+    ├── index.css
+    ├── index.tsx
+    ├── logo.svg
+    ├── react-app-env.d.ts
+    ├── reportWebVitals.ts
+    └── setupTests.ts
+    
+    2 directories, 13 files
+
+// ./index.tsx
+import React from 'react';
+import ReactDOM from 'react-dom';
+import './index.css';
+import App from './App';
+
+ReactDOM.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+  document.getElementById('root')
+);
+
+// ./App.tsx
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import SearchList from './components/SearchList';
+import SearchEdit from './components/SearchEdit';
+import SearchResults from './components/SearchResults';
+
+const App: React.FC = () => {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/" element={<SearchList />} />
+        <Route path="/new-search" element={<SearchEdit />} />
+        <Route path="/edit-search/:id" element={<SearchEdit />} />
+        <Route path="/searches/:id/results" element={<SearchResults />} />
+      </Routes>
+    </Router>
+  );
+};
+
+export default App;
+
+// ./App.test.tsx
+import React from 'react';
+import { render, screen } from '@testing-library/react';
+import App from './App';
+
+test('renders learn react link', () => {
+  render(<App />);
+  const linkElement = screen.getByText(/learn react/i);
+  expect(linkElement).toBeInTheDocument();
+});
+
+// ./api.ts
+import axios from 'axios';
+
+const API_BASE_URL = 'http://localhost:3000/api';
+
+export const getSearches = () => axios.get(`${API_BASE_URL}/searches`);
+export const createSearch = (data: any) => axios.post(`${API_BASE_URL}/searches`, data);
+export const updateSearch = (id: number, data: any) => axios.put(`${API_BASE_URL}/searches/${id}`, data);
+export const deleteSearch = (id: number) => axios.delete(`${API_BASE_URL}/searches/${id}`);
+export const getSearchResults = (searchId: number) => axios.get(`${API_BASE_URL}/searches/${searchId}/results`);
+
+// ./setupTests.ts
+// jest-dom adds custom jest matchers for asserting on DOM nodes.
+// allows you to do things like:
+// expect(element).toHaveTextContent(/react/i)
+// learn more: https://github.com/testing-library/jest-dom
+import '@testing-library/jest-dom';
+
+// ./reportWebVitals.ts
+import { ReportHandler } from 'web-vitals';
+
+const reportWebVitals = (onPerfEntry?: ReportHandler) => {
+  if (onPerfEntry && onPerfEntry instanceof Function) {
+    import('web-vitals').then(({ getCLS, getFID, getFCP, getLCP, getTTFB }) => {
+      getCLS(onPerfEntry);
+      getFID(onPerfEntry);
+      getFCP(onPerfEntry);
+      getLCP(onPerfEntry);
+      getTTFB(onPerfEntry);
+    });
+  }
+};
+
+export default reportWebVitals;
+
+// ./components/SearchList.tsx
+import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { getSearches, deleteSearch } from '../api';
+
+const SearchList: React.FC = () => {
+  const [searches, setSearches] = useState<any[]>([]);
+
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const response = await getSearches();
+        setSearches(response.data);
+      } catch (error) {
+        console.error("Error fetching searches:", error);
+      }
+    }
+    fetchData();
+  }, []);
+
+  const handleDelete = async (id: number) => {
+    try {
+      await deleteSearch(id);
+      setSearches(searches.filter(search => search.id !== id));
+    } catch (error) {
+      console.error("Error deleting search:", error);
+    }
+  };
+
+  return (
+    <div>
+      <h2>Configured Searches</h2>
+      <ul>
+        {searches.map(search => (
+          <li key={search.id}>
+            <Link to={`/searches/${search.id}/results`}>{search.keyword} - {search.location}</Link>
+            <button onClick={() => handleDelete(search.id)}>Delete</button>
+            <Link to={`/edit-search/${search.id}`}>Edit</Link>
+          </li>
+        ))}
+      </ul>
+      <Link to="/new-search">Create New Search</Link>
+    </div>
+  );
+};
+
+export default SearchList;
+
+// ./components/SearchResults.tsx
+import React, { useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom';
+import { getSearchResults } from '../api';
+
+const SearchResults: React.FC = () => {
+  const { id } = useParams<{ id: string }>();
+  const [results, setResults] = useState<any[]>([]);
+
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const response = await getSearchResults(Number(id));
+        setResults(response.data);
+      } catch (error) {
+        console.error("Error fetching search results:", error);
+      }
+    }
+    fetchData();
+  }, [id]);
+
+  return (
+    <div>
+      <h2>Search Results</h2>
+      <ul>
+        {results.map(result => (
+          <li key={result.id}>
+            <a href={result.jobUrl} target="_blank" rel="noopener noreferrer">
+              {result.position} at {result.company} - {result.location}
+            </a>
+            <p>{result.date}</p>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+};
+
+export default SearchResults;
+
+// ./components/SearchEdit.tsx
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { createSearch, updateSearch, getSearches } from '../api';
+
+const SearchEdit: React.FC = () => {
+  const { id } = useParams<{ id: string }>();
+  const [keyword, setKeyword] = useState('');
+  const [location, setLocation] = useState('');
+  const [refreshInterval, setRefreshInterval] = useState(0);
+  const navigate = useNavigate(); // Updated variable name
+
+  useEffect(() => {
+    if (id) {
+      const fetchData = async () => {
+        try {
+          const response = await getSearches();
+          const search = response.data.find((search: any) => search.id === Number(id));
+          if (search) {
+            setKeyword(search.keyword);
+            setLocation(search.location);
+            setRefreshInterval(search.refreshInterval);
+          }
+        } catch (error) {
+          console.error("Error fetching search:", error);
+        }
+      };
+      fetchData();
+    }
+  }, [id]);
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    try {
+      if (id) {
+        await updateSearch(Number(id), { keyword, location, refreshInterval });
+      } else {
+        await createSearch({ keyword, location, refreshInterval });
+      }
+      navigate('/'); // Use navigate function directly
+    } catch (error) {
+      console.error("Error saving search:", error);
+    }
+  };
+
+  return (
+    <div>
+      <h2>{id ? 'Edit Search' : 'Create New Search'}</h2>
+      <form onSubmit={handleSubmit}>
+        <div>
+          <label>Keyword:</label>
+          <input
+            type="text"
+            value={keyword}
+            onChange={(e) => setKeyword(e.target.value)}
+            required
+          />
+        </div>
+        <div>
+          <label>Location:</label>
+          <input
+            type="text"
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            required
+          />
+        </div>
+        <div>
+          <label>Refresh Interval (minutes):</label>
+          <input
+            type="number"
+            value={refreshInterval}
+            onChange={(e) => setRefreshInterval(Number(e.target.value))}
+            required
+          />
+        </div>
+        <button type="submit">Save</button>
+      </form>
+    </div>
+  );
+};
+
+export default SearchEdit;
+
+// ./react-app-env.d.ts
+/// <reference types="react-scripts" />
+
+src/
+
+    .
+    ├── App.css
+    ├── App.test.tsx
+    ├── App.tsx
+    ├── api.ts
+    ├── components
+    │   ├── SearchEdit.tsx
+    │   ├── SearchList.tsx
+    │   └── SearchResults.tsx
+    ├── index.css
+    ├── index.tsx
+    ├── logo.svg
+    ├── react-app-env.d.ts
+    ├── reportWebVitals.ts
+    └── setupTests.ts
+    
+    2 directories, 13 files
+
+src/
+
+    .
+    ├── App.css
+    ├── App.test.tsx
+    ├── App.tsx
+    ├── api.ts
+    ├── components
+    │   ├── SearchEdit.tsx
+    │   ├── SearchList.tsx
+    │   └── SearchResults.tsx
+    ├── index.css
+    ├── index.tsx
+    ├── logo.svg
+    ├── react-app-env.d.ts
+    ├── reportWebVitals.ts
+    └── setupTests.ts
+    
+    2 directories, 13 files
+
+// ./index.tsx
+import React from 'react';
+import ReactDOM from 'react-dom';
+import './index.css';
+import App from './App';
+
+ReactDOM.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+  document.getElementById('root')
+);
+
+// ./App.tsx
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import SearchList from './components/SearchList';
+import SearchEdit from './components/SearchEdit';
+import SearchResults from './components/SearchResults';
+
+const App: React.FC = () => {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/" element={<SearchList />} />
+        <Route path="/new-search" element={<SearchEdit />} />
+        <Route path="/edit-search/:id" element={<SearchEdit />} />
+        <Route path="/searches/:id/results" element={<SearchResults />} />
+      </Routes>
+    </Router>
+  );
+};
+
+export default App;
+
+// ./App.test.tsx
+import React from 'react';
+import { render, screen } from '@testing-library/react';
+import App from './App';
+
+test('renders learn react link', () => {
+  render(<App />);
+  const linkElement = screen.getByText(/learn react/i);
+  expect(linkElement).toBeInTheDocument();
+});
+
+// ./components/SearchList.tsx
+import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { getSearches, deleteSearch } from '../api';
+
+const SearchList: React.FC = () => {
+  const [searches, setSearches] = useState<any[]>([]);
+
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const response = await getSearches();
+        setSearches(response.data);
+      } catch (error) {
+        console.error("Error fetching searches:", error);
+      }
+    }
+    fetchData();
+  }, []);
+
+  const handleDelete = async (id: number) => {
+    try {
+      await deleteSearch(id);
+      setSearches(searches.filter(search => search.id !== id));
+    } catch (error) {
+      console.error("Error deleting search:", error);
+    }
+  };
+
+  return (
+    <div>
+      <h2>Configured Searches</h2>
+      <ul>
+        {searches.map(search => (
+          <li key={search.id}>
+            <Link to={`/searches/${search.id}/results`}>{search.keyword} - {search.location}</Link>
+            <button onClick={() => handleDelete(search.id)}>Delete</button>
+            <Link to={`/edit-search/${search.id}`}>Edit</Link>
+          </li>
+        ))}
+      </ul>
+      <Link to="/new-search">Create New Search</Link>
+    </div>
+  );
+};
+
+export default SearchList;
+
+// ./components/SearchResults.tsx
+import React, { useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom';
+import { getSearchResults } from '../api';
+
+const SearchResults: React.FC = () => {
+  const { id } = useParams<{ id: string }>();
+  const [results, setResults] = useState<any[]>([]);
+
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const response = await getSearchResults(Number(id));
+        setResults(response.data);
+      } catch (error) {
+        console.error("Error fetching search results:", error);
+      }
+    }
+    fetchData();
+  }, [id]);
+
+  return (
+    <div>
+      <h2>Search Results</h2>
+      <ul>
+        {results.map(result => (
+          <li key={result.id}>
+            <a href={result.jobUrl} target="_blank" rel="noopener noreferrer">
+              {result.position} at {result.company} - {result.location}
+            </a>
+            <p>{result.date}</p>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+};
+
+export default SearchResults;
+
+// ./components/SearchEdit.tsx
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { createSearch, updateSearch, getSearches } from '../api';
+
+const SearchEdit: React.FC = () => {
+  const { id } = useParams<{ id: string }>();
+  const [keyword, setKeyword] = useState('');
+  const [location, setLocation] = useState('');
+  const [refreshInterval, setRefreshInterval] = useState(0);
+  const navigate = useNavigate(); // Updated variable name
+
+  useEffect(() => {
+    if (id) {
+      const fetchData = async () => {
+        try {
+          const response = await getSearches();
+          const search = response.data.find((search: any) => search.id === Number(id));
+          if (search) {
+            setKeyword(search.keyword);
+            setLocation(search.location);
+            setRefreshInterval(search.refreshInterval);
+          }
+        } catch (error) {
+          console.error("Error fetching search:", error);
+        }
+      };
+      fetchData();
+    }
+  }, [id]);
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    try {
+      if (id) {
+        await updateSearch(Number(id), { keyword, location, refreshInterval });
+      } else {
+        await createSearch({ keyword, location, refreshInterval });
+      }
+      navigate('/'); // Use navigate function directly
+    } catch (error) {
+      console.error("Error saving search:", error);
+    }
+  };
+
+  return (
+    <div>
+      <h2>{id ? 'Edit Search' : 'Create New Search'}</h2>
+      <form onSubmit={handleSubmit}>
+        <div>
+          <label>Keyword:</label>
+          <input
+            type="text"
+            value={keyword}
+            onChange={(e) => setKeyword(e.target.value)}
+            required
+          />
+        </div>
+        <div>
+          <label>Location:</label>
+          <input
+            type="text"
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            required
+          />
+        </div>
+        <div>
+          <label>Refresh Interval (minutes):</label>
+          <input
+            type="number"
+            value={refreshInterval}
+            onChange={(e) => setRefreshInterval(Number(e.target.value))}
+            required
+          />
+        </div>
+        <button type="submit">Save</button>
+      </form>
+    </div>
+  );
+};
+
+export default SearchEdit;
+

@@ -24,6 +24,7 @@ ts-jobs-service/
     │   │   ├── LinkedInService.js
     │   │   └── SearchManager.js
     │   ├── testDatabaseConnections.js
+    │   ├── testInsert.js
     │   ├── types.js
     │   └── utils
     │       └── logger.js
@@ -45,6 +46,7 @@ ts-jobs-service/
     ├── package.json
     ├── scrapedPage.bak.html
     ├── scrapedPage.html
+    ├── screenshot.png
     ├── src
     │   ├── config
     │   ├── config.ts
@@ -63,12 +65,13 @@ ts-jobs-service/
     │   │   ├── LinkedInService.ts
     │   │   └── SearchManager.ts
     │   ├── testDatabaseConnections.ts
+    │   ├── testInsert.ts
     │   ├── types.ts
     │   └── utils
     │       └── logger.ts
     └── tsconfig.json
     
-    19 directories, 48 files
+    19 directories, 51 files
 
 // ./src/utils/logger.ts
 
@@ -233,11 +236,41 @@ import logger from './utils/logger';
   }
 })();
 
-// ./src/index.ts
+// ./src/testInsert.ts
+import SearchResult from './models/SearchResult';
+import sequelize from './db';
 
+(async () => {
+  try {
+    // Ensure the database connection is established
+    await sequelize.authenticate();
+
+    const testListing = {
+      searchId: 1,
+      position: 'Software Engineer',
+      company: 'Tech Corp',
+      location: 'Remote',
+      date: '2024-08-01',
+      salary: '$100,000',
+      jobUrl: 'http://example.com/job/1',
+    };
+
+    // Insert the test data into the SearchResult table
+    await SearchResult.create(testListing);
+    console.log('Test insertion successful');
+  } catch (error) {
+    console.error('Test insertion failed', error);
+  } finally {
+    // Close the database connection
+    await sequelize.close();
+  }
+})();
+
+// ./src/index.ts
 import express from 'express';
 import * as dotenv from 'dotenv';
 import bodyParser from 'body-parser';
+import cors from 'cors';  // Importing CORS
 import searchRoutes from './routes/SearchRoutes';
 import sequelize from './db';
 import SearchDefinition from './models/SearchDefinition';
@@ -254,6 +287,9 @@ process.on('unhandledRejection', (reason, promise) => {
 
 const app = express();
 const port = process.env.PORT || 3000;
+
+// Enable CORS for all routes
+app.use(cors());
 
 app.use(bodyParser.json());
 
@@ -449,7 +485,6 @@ router.get('/searches/:id/results', getSearchResults);
 export default router;
 
 // ./src/services/SearchManager.ts
-
 import nodeSchedule from 'node-schedule';
 import SearchDefinition from '../models/SearchDefinition';
 import SearchResult from '../models/SearchResult';
@@ -463,7 +498,7 @@ export const scheduleJobForSearch = async (search: SearchDefinition) => {
     jobs[search.id].cancel();
   }
 
-  logger.info('Scheduling job', { searchId: search.id, refreshInterval: search.refreshInterval });
+  logger.info('Scheduling job for search', { searchId: search.id, refreshInterval: search.refreshInterval });
 
   const job = nodeSchedule.scheduleJob(`*/${search.refreshInterval} * * * *`, async () => {
     try {
@@ -482,7 +517,7 @@ export const scheduleJobForSearch = async (search: SearchDefinition) => {
             company: listing.company,
             location: listing.location,
             date: listing.date,
-            salary: listing.salary,
+            salary: listing.salary, // Assuming you have a salary field in the DB schema
             jobUrl: listing.jobUrl,
           });
           logger.info('Job listing saved', { listing });
@@ -556,7 +591,6 @@ const fetchJobListings = async (queryObject: { keyword: string; location: string
 export default fetchJobListings;
 
 // ./src/services/LinkedInScraper.ts
-
 import puppeteer from 'puppeteer';
 import { JobListing } from '../types';
 import logger from '../utils/logger';
@@ -566,48 +600,64 @@ const fetchJobListings = async (queryObject: { keyword: string; location: string
   const { keyword, location } = queryObject;
   const url = `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent(keyword)}&location=${encodeURIComponent(location)}`;
 
-  logger.info('Starting job listings scraping', { keyword, location });
+  logger.info('Starting job listings scraping', { keyword, location, url });
 
   let browser;
   try {
-    browser = await puppeteer.launch({ headless: false }); // Set headless: false to see the browser
+    browser = await puppeteer.launch({ headless: true });
     const page = await browser.newPage();
-    await page.goto(url, { waitUntil: 'networkidle2' });
+    await page.goto(url, { waitUntil: 'networkidle2' }); // Ensures all network activity is finished
 
-    // Log the current URL and page content length
-    logger.info('Page loaded', { url: page.url() });
-    const pageContent = await page.content();
-    logger.info('Page content length', { length: pageContent.length });
+    logger.info('Page loaded', { url });
 
     // Save the HTML content to a file for inspection
+    const pageContent = await page.content();
     fs.writeFileSync('scrapedPage.html', pageContent);
+    logger.info('Page content saved for inspection', { filePath: 'scrapedPage.html' });
 
-    // Wait for a specific selector to ensure the page content is fully loaded
-    await page.waitForSelector('.result-card__contents');
+    // Take a screenshot to verify visual state
+    await page.screenshot({ path: 'screenshot.png', fullPage: true });
+    logger.info('Screenshot taken for inspection', { filePath: 'screenshot.png' });
 
-    // Scrape the job listings
-    const jobListings: JobListing[] = await page.evaluate(() => {
-      const jobs: JobListing[] = [];
-      const jobElements = document.querySelectorAll('.result-card__contents');
+    // Ensure the selector is found or retry
+    try {
+      await page.waitForSelector('.base-search-card', { timeout: 60000 });
+      logger.info('Selector found, extracting job listings');
 
-      jobElements.forEach(jobElement => {
-        const position = (jobElement.querySelector('.result-card__title') as HTMLElement)?.innerText || '';
-        const company = (jobElement.querySelector('.result-card__subtitle') as HTMLElement)?.innerText || '';
-        const location = (jobElement.querySelector('.job-result-card__location') as HTMLElement)?.innerText || '';
-        const date = (jobElement.querySelector('time') as HTMLTimeElement)?.getAttribute('datetime') || '';
-        const jobUrl = (jobElement.querySelector('a') as HTMLAnchorElement)?.href || '';
+      // Scrape the job listings
+      const jobListings: JobListing[] = await page.evaluate(() => {
+        const jobs = Array.from(document.querySelectorAll('.base-search-card')).map(jobElement => {
+          const titleElement = jobElement.querySelector('.base-search-card__title');
+          const companyElement = jobElement.querySelector('.base-search-card__subtitle');
+          const locationElement = jobElement.querySelector('.job-search-card__location');
+          const dateElement = jobElement.querySelector('time.job-search-card__listdate');
+          const linkElement = jobElement.querySelector<HTMLAnchorElement>('.base-card__full-link');
 
-        if (position && company && location && date && jobUrl) {
-          jobs.push({ position, company, location, date, salary: '', jobUrl });
-        }
+          const title = titleElement ? (titleElement as HTMLElement).innerText.trim() : '';
+          const company = companyElement ? (companyElement as HTMLElement).innerText.trim() : '';
+          const location = locationElement ? (locationElement as HTMLElement).innerText.trim() : '';
+          const date = dateElement ? (dateElement as HTMLElement).innerText.trim() : '';
+          const jobUrl = linkElement ? linkElement.href : '';
+
+          return {
+            position: title,
+            company,
+            location,
+            date,
+            salary: '', // Placeholder for salary, as it’s not extracted from the provided HTML snippet
+            jobUrl
+          } as JobListing;
+        });
+        return jobs;
       });
 
-      return jobs;
-    });
+      logger.info('Job listings scraped successfully', { count: jobListings.length, jobListings });
+      return jobListings;
 
-    logger.info('Job listings scraped successfully', { count: jobListings.length });
-    logger.info('Extracted job listings', { jobListings });
-    return jobListings;
+    } catch (error) {
+      logger.error('Selector not found within timeout period', { error: error instanceof Error ? error.message : String(error) });
+      throw error;
+    }
 
   } catch (error: any) {
     logger.error('Error occurred during scraping', { error: error.message });
