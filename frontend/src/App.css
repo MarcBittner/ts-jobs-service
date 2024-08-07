@@ -1,46 +1,63 @@
-.app-container {
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
   font-family: Arial, sans-serif;
 }
 
-header {
-  background-color: #282c34;
-  padding: 20px;
-  color: white;
+.app-container {
+  display: flex;
+  height: 100%;
 }
 
-header h1 {
-  margin: 0;
-  font-size: 2em;
+.sidebar {
+  width: 240px;
+  background-color: #282c34;
+  color: white;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-header {
+  padding: 20px;
+  background-color: #20232a;
+}
+
+.sidebar-header h1 {
+  font-size: 1.5em;
+  margin-bottom: 10px;
 }
 
 .versions {
   display: flex;
-  flex-direction: column; /* Align versions vertically */
-  align-items: flex-start; /* Align text to the left */
-  margin-top: 5px;
-  font-size: 0.8em;
+  flex-direction: column;
 }
 
 .versions small {
-  margin: 0;
+  margin: 2px 0;
 }
 
 nav ul {
   list-style: none;
-  padding: 0;
-  display: flex;
-  gap: 15px;
+  padding: 20px;
 }
 
 nav a {
+  display: block;
   color: white;
   text-decoration: none;
+  padding: 10px 0;
 }
 
 nav a:hover {
-  text-decoration: underline;
+  background-color: #61dafb;
 }
 
-main {
+.content {
+  flex-grow: 1;
   padding: 20px;
 }

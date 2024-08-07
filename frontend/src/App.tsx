@@ -12,7 +12,6 @@ const frontendVersion = process.env.REACT_APP_VERSION || '1.0';
 const App: React.FC = () => {
   const [backendVersion, setBackendVersion] = useState<string>('');
 
-  // Fetch backend version
   useEffect(() => {
     async function fetchBackendVersion() {
       try {
@@ -30,11 +29,13 @@ const App: React.FC = () => {
   return (
     <Router>
       <div className="app-container">
-        <header>
-          <h1>{appName}</h1>
-          <div className="versions">
-            <small>Frontend v{frontendVersion}</small>
-            <small>Backend v{backendVersion}</small>
+        <aside className="sidebar">
+          <div className="sidebar-header">
+            <h1>{appName}</h1>
+            <div className="versions">
+              <small>Frontend v{frontendVersion}</small>
+              <small>Backend v{backendVersion}</small>
+            </div>
           </div>
           <nav>
             <ul>
@@ -43,8 +44,8 @@ const App: React.FC = () => {
               <li><Link to="/logs">Logs</Link></li>
             </ul>
           </nav>
-        </header>
-        <main>
+        </aside>
+        <main className="content">
           <Routes>
             <Route path="/" element={<SearchList />} />
             <Route path="/new-search" element={<SearchEdit />} />
