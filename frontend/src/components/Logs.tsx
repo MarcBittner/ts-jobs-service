@@ -38,7 +38,7 @@ const Logs: React.FC = () => {
         <button onClick={() => setLogType('application')}>Application Log</button>
         <button onClick={() => setLogType('build')}>Build Log</button>
       </div>
-      <pre>{logs}</pre>
+      <pre className="log-content">{logs}</pre>
     </div>
   );
 };

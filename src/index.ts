@@ -77,6 +77,11 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'frontend', 'build', 'index.html'));
 });
 
+app.get('/api/version', (req, res) => {
+  const packageJson = require('../package.json');
+  res.json({ version: packageJson.version });
+});
+
 (async () => {
   try {
     // Database checks

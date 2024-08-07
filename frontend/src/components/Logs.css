@@ -10,3 +10,14 @@ button {
   margin-right: 10px;
   padding: 5px 10px;
 }
+
+.log-content {
+  white-space: pre-wrap; /* Ensures the text wraps */
+  word-wrap: break-word; /* Prevents long words from breaking the layout */
+  background-color: #f5f5f5;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  max-height: 400px;
+  overflow-y: auto;
+}
