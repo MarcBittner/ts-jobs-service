@@ -6,12 +6,15 @@ import SearchResults from './components/SearchResults';
 import Logs from './components/Logs';
 import './App.css';
 
+const appName = process.env.REACT_APP_NAME || 'MyApp';
+const appVersion = process.env.REACT_APP_VERSION || '1.0';
+
 const App: React.FC = () => {
   return (
     <Router>
       <div className="app-container">
         <header>
-          <h1>MyApp v1.0</h1>
+          <h1>{`${appName} v${appVersion}`}</h1>
           <nav>
             <ul>
               <li><Link to="/">Searches</Link></li>

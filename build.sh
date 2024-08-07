@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 
-
 unset me executionDirectory sourceDirectory runtime importFiles binaryRequirements tapRequirements
 set -a
 runtime="$(date +%y%m%d_%H%M%S)"
@@ -12,7 +11,7 @@ sourceDirectory="$( cd -- "$(dirname -- "$(readlink -- "${BASH_SOURCE[0]}")")" >
 LOG_TAG='ts-jobsearch-service-build' # Optional syslog app name
 LOG_LEVEL='DEBUG'
 DATETIME_FORMAT="+%Y-%m-%dT%H:%M:%S%z" # "+%FT%T%Z"
-LOG_FILE="${logFileName-"${me}.log"}"
+LOG_FILE="./logs/${logFileName-"${me}.log"}"
 
 # Define imports
 importFiles=(
@@ -43,6 +42,14 @@ _bashlog info "$(npm install --prefix $BACKEND_DIR 2>&1 | tee /dev/tty)"
 # Compile backend TypeScript files
 _bashlog info "Compiling backend TypeScript files..."
 _bashlog info "$(npx tsc --build $BACKEND_DIR --listEmittedFiles 2>&1 | tee /dev/tty)"
+
+# Extract app name and version from the backend package.json
+APP_NAME=$(node -p -e "require('./package.json').name")
+APP_VERSION=$(node -p -e "require('./package.json').version")
+
+# Inject into .env file for frontend
+echo "REACT_APP_NAME=$APP_NAME" > $FRONTEND_DIR/.env
+echo "REACT_APP_VERSION=$APP_VERSION" >> $FRONTEND_DIR/.env
 
 # Install frontend dependencies
 _bashlog info "Installing frontend dependencies..."

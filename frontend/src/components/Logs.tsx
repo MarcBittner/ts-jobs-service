@@ -7,12 +7,25 @@ const Logs: React.FC = () => {
 
   useEffect(() => {
     async function fetchLogs() {
+      console.log(`Fetching ${logType} log`);
       try {
-        const response = await fetch(`/logs/${logType}.log`);
-        const text = await response.text();
-        setLogs(text);
+        const response = await fetch(`/logs/${logType}.log?cacheBust=${Date.now()}`);
+        console.log(`Request URL: ${response.url}`);
+        console.log(`Response status: ${response.status}`);
+        console.log(`Response headers:`, response.headers);
+        const contentType = response.headers.get('content-type');
+        console.log(`Content-Type: ${contentType}`);
+        if (response.ok && contentType && contentType.includes('text/plain')) {
+          const text = await response.text();
+          console.log(`Log content: ${text}`);
+          setLogs(text);
+        } else {
+          console.log(`Failed to fetch log: ${response.statusText}`);
+          setLogs('Log file not found.');
+        }
       } catch (error) {
         console.error("Error fetching logs:", error);
+        setLogs('Error fetching logs.');
       }
     }
     fetchLogs();
